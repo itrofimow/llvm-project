@@ -1031,8 +1031,7 @@ private:
     typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
                                                  __value_type>::type          __allocator_type;
 
-    typedef __hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+    typedef __hash_table<__value_type, __hasher, __key_equal, __allocator_type, __hash_table_traits<true >> __table;
 
     __table __table_;
 
@@ -1921,8 +1920,7 @@ private:
     typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
                                                  __value_type>::type          __allocator_type;
 
-    typedef __hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+    typedef __hash_table<__value_type, __hasher, __key_equal, __allocator_type, __hash_table_traits<false>> __table;
 
     __table __table_;
 

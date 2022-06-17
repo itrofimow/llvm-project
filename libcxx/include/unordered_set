@@ -501,9 +501,9 @@ public:
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_table<value_type, hasher, key_equal, allocator_type> __table;
+  typedef __hash_table<value_type, hasher, key_equal, allocator_type, __hash_table_traits<true >> __table;
 
-    __table __table_;
+  __table __table_;
 
 public:
     typedef typename __table::pointer         pointer;
@@ -1157,9 +1157,9 @@ public:
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_table<value_type, hasher, key_equal, allocator_type> __table;
+  typedef __hash_table<value_type, hasher, key_equal, allocator_type, __hash_table_traits<false>> __table;
 
-    __table __table_;
+  __table __table_;
 
 public:
     typedef typename __table::pointer         pointer;

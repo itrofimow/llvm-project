@@ -126,8 +126,8 @@ __next_hash_pow2(size_t __n)
     return __n < 2 ? __n : (size_t(1) << (numeric_limits<size_t>::digits - __libcpp_clz(__n-1)));
 }
 
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc> class __hash_table;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+class __hash_table;
 
 template <class _NodePtr>      class _LIBCPP_TEMPLATE_VIS __hash_iterator;
 template <class _ConstNodePtr> class _LIBCPP_TEMPLATE_VIS __hash_const_iterator;
@@ -860,9 +860,13 @@ __diagnose_unordered_container_requirements(int);
 template <class _Key, class _Hash, class _Equal>
 int __diagnose_unordered_container_requirements(void*);
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-class __hash_table
-{
+template <bool _Unique_Keys>
+struct __hash_table_traits {
+  typedef integral_constant<bool, _Unique_Keys> __unique_keys;
+};
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+class __hash_table {
 public:
     typedef _Tp    value_type;
     typedef _Hash  hasher;
@@ -921,6 +925,7 @@ private:
     typedef unique_ptr<__next_pointer[], __bucket_list_deleter> __bucket_list;
     typedef allocator_traits<__pointer_allocator>          __pointer_alloc_traits;
     typedef typename __bucket_list_deleter::pointer       __node_pointer_pointer;
+    typedef typename _Traits::__unique_keys __unique_keys;
 
     // --- Member data begin ---
     __bucket_list                                         __bucket_list_;
@@ -1342,124 +1347,90 @@ private:
     template <class, class, class, class, class> friend class _LIBCPP_TEMPLATE_VIS unordered_multimap;
 };
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table()
-    _NOEXCEPT_(
-        is_nothrow_default_constructible<__bucket_list>::value &&
-        is_nothrow_default_constructible<__first_node>::value &&
-        is_nothrow_default_constructible<__node_allocator>::value &&
-        is_nothrow_default_constructible<hasher>::value &&
-        is_nothrow_default_constructible<key_equal>::value)
-    : __p2_(0, __default_init_tag()),
-      __p3_(1.0f, __default_init_tag())
-{
-}
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table() _NOEXCEPT_(
+    is_nothrow_default_constructible<__bucket_list>::value&& is_nothrow_default_constructible<
+        __first_node>::value&& is_nothrow_default_constructible<__node_allocator>::value&&
+        is_nothrow_default_constructible<hasher>::value&& is_nothrow_default_constructible<key_equal>::value)
+    : __p2_(0, __default_init_tag()), __p3_(1.0f, __default_init_tag()) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
-                                                       const key_equal& __eql)
-    : __bucket_list_(nullptr, __bucket_list_deleter()),
-      __p1_(),
-      __p2_(0, __hf),
-      __p3_(1.0f, __eql)
-{
-}
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(const hasher& __hf, const key_equal& __eql)
+    : __bucket_list_(nullptr, __bucket_list_deleter()), __p1_(), __p2_(0, __hf), __p3_(1.0f, __eql) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
-                                                       const key_equal& __eql,
-                                                       const allocator_type& __a)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(
+    const hasher& __hf, const key_equal& __eql, const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
       __p2_(0, __hf),
-      __p3_(1.0f, __eql)
-{
-}
+      __p3_(1.0f, __eql) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const allocator_type& __a)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
       __p2_(0, __default_init_tag()),
-      __p3_(1.0f, __default_init_tag())
-{
-}
+      __p3_(1.0f, __default_init_tag()) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u)
-    : __bucket_list_(nullptr,
-          __bucket_list_deleter(allocator_traits<__pointer_allocator>::
-              select_on_container_copy_construction(
-                  __u.__bucket_list_.get_deleter().__alloc()), 0)),
-      __p1_(__default_init_tag(), allocator_traits<__node_allocator>::
-          select_on_container_copy_construction(__u.__node_alloc())),
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(const __hash_table& __u)
+    : __bucket_list_(
+          nullptr,
+          __bucket_list_deleter(
+              allocator_traits<__pointer_allocator>::select_on_container_copy_construction(
+                  __u.__bucket_list_.get_deleter().__alloc()),
+              0)),
+      __p1_(__default_init_tag(),
+            allocator_traits<__node_allocator>::select_on_container_copy_construction(__u.__node_alloc())),
       __p2_(0, __u.hash_function()),
-      __p3_(__u.__p3_)
-{
-}
+      __p3_(__u.__p3_) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u,
-                                                       const allocator_type& __a)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(const __hash_table& __u, const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
       __p2_(0, __u.hash_function()),
-      __p3_(__u.__p3_)
-{
-}
+      __p3_(__u.__p3_) {}
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u)
-        _NOEXCEPT_(
-            is_nothrow_move_constructible<__bucket_list>::value &&
-            is_nothrow_move_constructible<__first_node>::value &&
-            is_nothrow_move_constructible<__node_allocator>::value &&
-            is_nothrow_move_constructible<hasher>::value &&
-            is_nothrow_move_constructible<key_equal>::value)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(__hash_table&& __u) _NOEXCEPT_(
+    is_nothrow_move_constructible<__bucket_list>::value&& is_nothrow_move_constructible<
+        __first_node>::value&& is_nothrow_move_constructible<__node_allocator>::value&&
+        is_nothrow_move_constructible<hasher>::value&& is_nothrow_move_constructible<key_equal>::value)
     : __bucket_list_(_VSTD::move(__u.__bucket_list_)),
       __p1_(_VSTD::move(__u.__p1_)),
       __p2_(_VSTD::move(__u.__p2_)),
-      __p3_(_VSTD::move(__u.__p3_))
-{
-    if (size() > 0)
-    {
-        __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] =
-            __p1_.first().__ptr();
-        __u.__p1_.first().__next_ = nullptr;
-        __u.size() = 0;
-    }
+      __p3_(_VSTD::move(__u.__p3_)) {
+  if (size() > 0) {
+    __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] = __p1_.first().__ptr();
+    __u.__p1_.first().__next_                                                         = nullptr;
+    __u.size()                                                                        = 0;
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u,
-                                                       const allocator_type& __a)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__hash_table(__hash_table&& __u, const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
       __p2_(0, _VSTD::move(__u.hash_function())),
-      __p3_(_VSTD::move(__u.__p3_))
-{
-    if (__a == allocator_type(__u.__node_alloc()))
-    {
-        __bucket_list_.reset(__u.__bucket_list_.release());
-        __bucket_list_.get_deleter().size() = __u.__bucket_list_.get_deleter().size();
-        __u.__bucket_list_.get_deleter().size() = 0;
-        if (__u.size() > 0)
-        {
-            __p1_.first().__next_ = __u.__p1_.first().__next_;
-            __u.__p1_.first().__next_ = nullptr;
-            __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] =
-                __p1_.first().__ptr();
-            size() = __u.size();
-            __u.size() = 0;
-        }
+      __p3_(_VSTD::move(__u.__p3_)) {
+  if (__a == allocator_type(__u.__node_alloc())) {
+    __bucket_list_.reset(__u.__bucket_list_.release());
+    __bucket_list_.get_deleter().size()     = __u.__bucket_list_.get_deleter().size();
+    __u.__bucket_list_.get_deleter().size() = 0;
+    if (__u.size() > 0) {
+      __p1_.first().__next_                                                             = __u.__p1_.first().__next_;
+      __u.__p1_.first().__next_                                                         = nullptr;
+      __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] = __p1_.first().__ptr();
+      size()                                                                            = __u.size();
+      __u.size()                                                                        = 0;
     }
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::~__hash_table()
-{
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::~__hash_table() {
 #if defined(_LIBCPP_CXX03_LANG)
     static_assert((is_copy_constructible<key_equal>::value),
                  "Predicate must be copy-constructible.");
@@ -1471,45 +1442,35 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::~__hash_table()
     std::__debug_db_erase_c(this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__copy_assign_alloc(
-        const __hash_table& __u, true_type)
-{
-    if (__node_alloc() != __u.__node_alloc())
-    {
-        clear();
-        __bucket_list_.reset();
-        __bucket_list_.get_deleter().size() = 0;
-    }
-    __bucket_list_.get_deleter().__alloc() = __u.__bucket_list_.get_deleter().__alloc();
-    __node_alloc() = __u.__node_alloc();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__copy_assign_alloc(const __hash_table& __u, true_type) {
+  if (__node_alloc() != __u.__node_alloc()) {
+    clear();
+    __bucket_list_.reset();
+    __bucket_list_.get_deleter().size() = 0;
+  }
+  __bucket_list_.get_deleter().__alloc() = __u.__bucket_list_.get_deleter().__alloc();
+  __node_alloc()                         = __u.__node_alloc();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>&
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(const __hash_table& __u)
-{
-    if (this != _VSTD::addressof(__u))
-    {
-        __copy_assign_alloc(__u);
-        hash_function() = __u.hash_function();
-        key_eq() = __u.key_eq();
-        max_load_factor() = __u.max_load_factor();
-        __assign_multi(__u.begin(), __u.end());
-    }
-    return *this;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>&
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::operator=(const __hash_table& __u) {
+  if (this != _VSTD::addressof(__u)) {
+    __copy_assign_alloc(__u);
+    hash_function()   = __u.hash_function();
+    key_eq()          = __u.key_eq();
+    max_load_factor() = __u.max_load_factor();
+    __assign_multi(__u.begin(), __u.end());
+  }
+  return *this;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__deallocate_node(__next_pointer __np)
-    _NOEXCEPT
-{
-    __node_allocator& __na = __node_alloc();
-    while (__np != nullptr)
-    {
-        __next_pointer __next = __np->__next_;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__deallocate_node(__next_pointer __np) _NOEXCEPT {
+  __node_allocator& __na = __node_alloc();
+  while (__np != nullptr) {
+    __next_pointer __next = __np->__next_;
 #ifdef _LIBCPP_ENABLE_DEBUG_MODE
         __c_node* __c = __get_db()->__find_c_and_lock(this);
         for (__i_node** __p = __c->end_; __p != __c->beg_; )
@@ -1529,66 +1490,53 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__deallocate_node(__next_pointer __np)
         __node_traits::destroy(__na, _NodeTypes::__get_ptr(__real_np->__value_));
         __node_traits::deallocate(__na, __real_np, 1);
         __np = __next;
-    }
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__detach() _NOEXCEPT
-{
-    size_type __bc = bucket_count();
-    for (size_type __i = 0; __i < __bc; ++__i)
-        __bucket_list_[__i] = nullptr;
-    size() = 0;
-    __next_pointer __cache = __p1_.first().__next_;
-    __p1_.first().__next_ = nullptr;
-    return __cache;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__detach() _NOEXCEPT {
+  size_type __bc = bucket_count();
+  for (size_type __i = 0; __i < __bc; ++__i)
+    __bucket_list_[__i] = nullptr;
+  size()                 = 0;
+  __next_pointer __cache = __p1_.first().__next_;
+  __p1_.first().__next_  = nullptr;
+  return __cache;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
-        __hash_table& __u, true_type)
-    _NOEXCEPT_(
-        is_nothrow_move_assignable<__node_allocator>::value &&
-        is_nothrow_move_assignable<hasher>::value &&
-        is_nothrow_move_assignable<key_equal>::value)
-{
-    clear();
-    __bucket_list_.reset(__u.__bucket_list_.release());
-    __bucket_list_.get_deleter().size() = __u.__bucket_list_.get_deleter().size();
-    __u.__bucket_list_.get_deleter().size() = 0;
-    __move_assign_alloc(__u);
-    size() = __u.size();
-    hash_function() = _VSTD::move(__u.hash_function());
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__move_assign(__hash_table& __u, true_type) _NOEXCEPT_(
+    is_nothrow_move_assignable<__node_allocator>::value&& is_nothrow_move_assignable<hasher>::value&&
+        is_nothrow_move_assignable<key_equal>::value) {
+  clear();
+  __bucket_list_.reset(__u.__bucket_list_.release());
+  __bucket_list_.get_deleter().size()     = __u.__bucket_list_.get_deleter().size();
+  __u.__bucket_list_.get_deleter().size() = 0;
+  __move_assign_alloc(__u);
+  size()                = __u.size();
+  hash_function()       = _VSTD::move(__u.hash_function());
+  max_load_factor()     = __u.max_load_factor();
+  key_eq()              = _VSTD::move(__u.key_eq());
+  __p1_.first().__next_ = __u.__p1_.first().__next_;
+  if (size() > 0) {
+    __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] = __p1_.first().__ptr();
+    __u.__p1_.first().__next_                                                         = nullptr;
+    __u.size()                                                                        = 0;
+  }
+  std::__debug_db_swap(this, std::addressof(__u));
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__move_assign(__hash_table& __u, false_type) {
+  if (__node_alloc() == __u.__node_alloc())
+    __move_assign(__u, true_type());
+  else {
+    hash_function()   = _VSTD::move(__u.hash_function());
+    key_eq()          = _VSTD::move(__u.key_eq());
     max_load_factor() = __u.max_load_factor();
-    key_eq() = _VSTD::move(__u.key_eq());
-    __p1_.first().__next_ = __u.__p1_.first().__next_;
-    if (size() > 0)
-    {
-        __bucket_list_[__constrain_hash(__p1_.first().__next_->__hash(), bucket_count())] =
-            __p1_.first().__ptr();
-        __u.__p1_.first().__next_ = nullptr;
-        __u.size() = 0;
-    }
-    std::__debug_db_swap(this, std::addressof(__u));
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
-        __hash_table& __u, false_type)
-{
-    if (__node_alloc() == __u.__node_alloc())
-        __move_assign(__u, true_type());
-    else
-    {
-        hash_function() = _VSTD::move(__u.hash_function());
-        key_eq() = _VSTD::move(__u.key_eq());
-        max_load_factor() = __u.max_load_factor();
-        if (bucket_count() != 0)
-        {
-            __next_pointer __cache = __detach();
+    if (bucket_count() != 0) {
+      __next_pointer __cache = __detach();
 #ifndef _LIBCPP_NO_EXCEPTIONS
             try
             {
@@ -1611,7 +1559,7 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
             }
 #endif // _LIBCPP_NO_EXCEPTIONS
             __deallocate_node(__cache);
-        }
+    }
         const_iterator __i = __u.begin();
         while (__u.size() != 0)
         {
@@ -1619,38 +1567,29 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
             __node_insert_multi(__h.get());
             __h.release();
         }
-    }
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>&
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(__hash_table&& __u)
-    _NOEXCEPT_(
-        __node_traits::propagate_on_container_move_assignment::value &&
-        is_nothrow_move_assignable<__node_allocator>::value &&
-        is_nothrow_move_assignable<hasher>::value &&
-        is_nothrow_move_assignable<key_equal>::value)
-{
-    __move_assign(__u, integral_constant<bool,
-                  __node_traits::propagate_on_container_move_assignment::value>());
-    return *this;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>&
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::operator=(__hash_table&& __u) _NOEXCEPT_(
+    __node_traits::propagate_on_container_move_assignment::value&& is_nothrow_move_assignable<__node_allocator>::value&&
+        is_nothrow_move_assignable<hasher>::value&& is_nothrow_move_assignable<key_equal>::value) {
+  __move_assign(__u, integral_constant<bool, __node_traits::propagate_on_container_move_assignment::value>());
+  return *this;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _InputIterator>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_unique(_InputIterator __first,
-                                                          _InputIterator __last)
-{
-    typedef iterator_traits<_InputIterator> _ITraits;
-    typedef typename _ITraits::value_type _ItValueType;
-    static_assert((is_same<_ItValueType, __container_value_type>::value),
-                  "__assign_unique may only be called with the containers value type");
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__assign_unique(_InputIterator __first, _InputIterator __last) {
+  typedef iterator_traits<_InputIterator> _ITraits;
+  typedef typename _ITraits::value_type _ItValueType;
+  static_assert(
+      (is_same<_ItValueType, __container_value_type>::value),
+      "__assign_unique may only be called with the containers value type");
 
-    if (bucket_count() != 0)
-    {
-        __next_pointer __cache = __detach();
+  if (bucket_count() != 0) {
+    __next_pointer __cache = __detach();
 #ifndef _LIBCPP_NO_EXCEPTIONS
         try
         {
@@ -1671,26 +1610,22 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_unique(_InputIterator __first
         }
 #endif // _LIBCPP_NO_EXCEPTIONS
         __deallocate_node(__cache);
-    }
+  }
     for (; __first != __last; ++__first)
         __insert_unique(*__first);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _InputIterator>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_multi(_InputIterator __first,
-                                                         _InputIterator __last)
-{
-    typedef iterator_traits<_InputIterator> _ITraits;
-    typedef typename _ITraits::value_type _ItValueType;
-    static_assert((is_same<_ItValueType, __container_value_type>::value ||
-                  is_same<_ItValueType, __node_value_type>::value),
-                  "__assign_multi may only be called with the containers value type"
-                  " or the nodes value type");
-    if (bucket_count() != 0)
-    {
-        __next_pointer __cache = __detach();
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__assign_multi(_InputIterator __first, _InputIterator __last) {
+  typedef iterator_traits<_InputIterator> _ITraits;
+  typedef typename _ITraits::value_type _ItValueType;
+  static_assert(
+      (is_same<_ItValueType, __container_value_type>::value || is_same<_ItValueType, __node_value_type>::value),
+      "__assign_multi may only be called with the containers value type"
+      " or the nodes value type");
+  if (bucket_count() != 0) {
+    __next_pointer __cache = __detach();
 #ifndef _LIBCPP_NO_EXCEPTIONS
         try
         {
@@ -1711,58 +1646,46 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_multi(_InputIterator __first,
         }
 #endif // _LIBCPP_NO_EXCEPTIONS
         __deallocate_node(__cache);
-    }
+  }
     for (; __first != __last; ++__first)
         __insert_multi(_NodeTypes::__get_value(*__first));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::begin() _NOEXCEPT
-{
-    return iterator(__p1_.first().__next_, this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::begin() _NOEXCEPT {
+  return iterator(__p1_.first().__next_, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::end() _NOEXCEPT
-{
-    return iterator(nullptr, this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::end() _NOEXCEPT {
+  return iterator(nullptr, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::begin() const _NOEXCEPT
-{
-    return const_iterator(__p1_.first().__next_, this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::begin() const _NOEXCEPT {
+  return const_iterator(__p1_.first().__next_, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::end() const _NOEXCEPT
-{
-    return const_iterator(nullptr, this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::end() const _NOEXCEPT {
+  return const_iterator(nullptr, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::clear() _NOEXCEPT
-{
-    if (size() > 0)
-    {
-        __deallocate_node(__p1_.first().__next_);
-        __p1_.first().__next_ = nullptr;
-        size_type __bc = bucket_count();
-        for (size_type __i = 0; __i < __bc; ++__i)
-            __bucket_list_[__i] = nullptr;
-        size() = 0;
-    }
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::clear() _NOEXCEPT {
+  if (size() > 0) {
+    __deallocate_node(__p1_.first().__next_);
+    __p1_.first().__next_ = nullptr;
+    size_type __bc        = bucket_count();
+    for (size_type __i = 0; __i < __bc; ++__i)
+      __bucket_list_[__i] = nullptr;
+    size() = 0;
+  }
 }
-
 
 // Prepare the container for an insertion of the value __value with the hash
 // __hash. This does a lookup into the container to see if __value is already
@@ -1771,86 +1694,69 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::clear() _NOEXCEPT
 //
 // Note that this function does forward exceptions if key_eq() throws, and never
 // mutates __value or actually inserts into the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-_LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_prepare(
-    size_t __hash, value_type& __value)
-{
-    size_type __bc = bucket_count();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+_LIBCPP_INLINE_VISIBILITY typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_unique_prepare(size_t __hash, value_type& __value) {
+  size_type __bc = bucket_count();
 
-    if (__bc != 0)
-    {
-        size_t __chash = __constrain_hash(__hash, __bc);
-        __next_pointer __ndptr = __bucket_list_[__chash];
-        if (__ndptr != nullptr)
-        {
-            for (__ndptr = __ndptr->__next_; __ndptr != nullptr &&
-                                             __constrain_hash(__ndptr->__hash(), __bc) == __chash;
-                                                     __ndptr = __ndptr->__next_)
-            {
-                if (key_eq()(__ndptr->__upcast()->__value_, __value))
-                    return __ndptr;
-            }
-        }
+  if (__bc != 0) {
+    size_t __chash         = __constrain_hash(__hash, __bc);
+    __next_pointer __ndptr = __bucket_list_[__chash];
+    if (__ndptr != nullptr) {
+      for (__ndptr = __ndptr->__next_; __ndptr != nullptr && __constrain_hash(__ndptr->__hash(), __bc) == __chash;
+           __ndptr = __ndptr->__next_) {
+        if (key_eq()(__ndptr->__upcast()->__value_, __value))
+          return __ndptr;
+      }
     }
-    if (size()+1 > __bc * max_load_factor() || __bc == 0)
-    {
-        rehash(_VSTD::max<size_type>(2 * __bc + !__is_hash_power2(__bc),
-                                     size_type(ceil(float(size() + 1) / max_load_factor()))));
-    }
-    return nullptr;
+  }
+  if (size() + 1 > __bc * max_load_factor() || __bc == 0) {
+    rehash(_VSTD::max<size_type>(
+        2 * __bc + !__is_hash_power2(__bc), size_type(ceil(float(size() + 1) / max_load_factor()))));
+  }
+  return nullptr;
 }
 
 // Insert the node __nd into the container by pushing it into the right bucket,
 // and updating size(). Assumes that __nd->__hash is up-to-date, and that
 // rehashing has already occurred and that no element with the same key exists
 // in the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-_LIBCPP_INLINE_VISIBILITY
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_perform(
-    __node_pointer __nd) _NOEXCEPT
-{
-    size_type __bc = bucket_count();
-    size_t __chash = __constrain_hash(__nd->__hash(), __bc);
-    // insert_after __bucket_list_[__chash], or __first_node if bucket is null
-    __next_pointer __pn = __bucket_list_[__chash];
-    if (__pn == nullptr)
-    {
-        __pn =__p1_.first().__ptr();
-        __nd->__next_ = __pn->__next_;
-        __pn->__next_ = __nd->__ptr();
-        // fix up __bucket_list_
-        __bucket_list_[__chash] = __pn;
-        if (__nd->__next_ != nullptr)
-            __bucket_list_[__constrain_hash(__nd->__next_->__hash(), __bc)] = __nd->__ptr();
-    }
-    else
-    {
-        __nd->__next_ = __pn->__next_;
-        __pn->__next_ = __nd->__ptr();
-    }
-    ++size();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+_LIBCPP_INLINE_VISIBILITY void
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_unique_perform(__node_pointer __nd) _NOEXCEPT {
+  size_type __bc = bucket_count();
+  size_t __chash = __constrain_hash(__nd->__hash(), __bc);
+  // insert_after __bucket_list_[__chash], or __first_node if bucket is null
+  __next_pointer __pn = __bucket_list_[__chash];
+  if (__pn == nullptr) {
+    __pn          = __p1_.first().__ptr();
+    __nd->__next_ = __pn->__next_;
+    __pn->__next_ = __nd->__ptr();
+    // fix up __bucket_list_
+    __bucket_list_[__chash] = __pn;
+    if (__nd->__next_ != nullptr)
+      __bucket_list_[__constrain_hash(__nd->__next_->__hash(), __bc)] = __nd->__ptr();
+  } else {
+    __nd->__next_ = __pn->__next_;
+    __pn->__next_ = __nd->__ptr();
+  }
+  ++size();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique(__node_pointer __nd)
-{
-    __nd->__hash_ = hash_function()(__nd->__value_);
-    __next_pointer __existing_node =
-        __node_insert_unique_prepare(__nd->__hash(), __nd->__value_);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_unique(__node_pointer __nd) {
+  __nd->__hash_                  = hash_function()(__nd->__value_);
+  __next_pointer __existing_node = __node_insert_unique_prepare(__nd->__hash(), __nd->__value_);
 
-    // Insert the node, unless it already exists in the container.
-    bool __inserted = false;
-    if (__existing_node == nullptr)
-    {
-        __node_insert_unique_perform(__nd);
-        __existing_node = __nd->__ptr();
-        __inserted = true;
-    }
-    return pair<iterator, bool>(iterator(__existing_node, this), __inserted);
+  // Insert the node, unless it already exists in the container.
+  bool __inserted = false;
+  if (__existing_node == nullptr) {
+    __node_insert_unique_perform(__nd);
+    __existing_node = __nd->__ptr();
+    __inserted      = true;
+  }
+  return pair<iterator, bool>(iterator(__existing_node, this), __inserted);
 }
 
 // Prepare the container for an insertion of the value __cp_val with the hash
@@ -1860,42 +1766,35 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique(__node_pointer __
 //
 // Note that this function does forward exceptions if key_eq() throws, and never
 // mutates __value or actually inserts into the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_prepare(
-    size_t __cp_hash, value_type& __cp_val)
-{
-    size_type __bc = bucket_count();
-    if (size()+1 > __bc * max_load_factor() || __bc == 0)
-    {
-        rehash(_VSTD::max<size_type>(2 * __bc + !__is_hash_power2(__bc),
-                       size_type(ceil(float(size() + 1) / max_load_factor()))));
-        __bc = bucket_count();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_multi_prepare(size_t __cp_hash, value_type& __cp_val) {
+  size_type __bc = bucket_count();
+  if (size() + 1 > __bc * max_load_factor() || __bc == 0) {
+    rehash(_VSTD::max<size_type>(
+        2 * __bc + !__is_hash_power2(__bc), size_type(ceil(float(size() + 1) / max_load_factor()))));
+    __bc = bucket_count();
+  }
+  size_t __chash      = __constrain_hash(__cp_hash, __bc);
+  __next_pointer __pn = __bucket_list_[__chash];
+  if (__pn != nullptr) {
+    for (bool __found = false; __pn->__next_ != nullptr && __constrain_hash(__pn->__next_->__hash(), __bc) == __chash;
+         __pn         = __pn->__next_) {
+      //      __found    key_eq()     action
+      //      false       false       loop
+      //      true        true        loop
+      //      false       true        set __found to true
+      //      true        false       break
+      if (__found !=
+          (__pn->__next_->__hash() == __cp_hash && key_eq()(__pn->__next_->__upcast()->__value_, __cp_val))) {
+        if (!__found)
+          __found = true;
+        else
+          break;
+      }
     }
-    size_t __chash = __constrain_hash(__cp_hash, __bc);
-    __next_pointer __pn = __bucket_list_[__chash];
-    if (__pn != nullptr)
-    {
-        for (bool __found = false; __pn->__next_ != nullptr &&
-                                   __constrain_hash(__pn->__next_->__hash(), __bc) == __chash;
-                                                           __pn = __pn->__next_)
-        {
-            //      __found    key_eq()     action
-            //      false       false       loop
-            //      true        true        loop
-            //      false       true        set __found to true
-            //      true        false       break
-            if (__found != (__pn->__next_->__hash() == __cp_hash &&
-                            key_eq()(__pn->__next_->__upcast()->__value_, __cp_val)))
-            {
-                if (!__found)
-                    __found = true;
-                else
-                    break;
-            }
-        }
-    }
-    return __pn;
+  }
+  return __pn;
 }
 
 // Insert the node __cp into the container after __pn (which is the last node in
@@ -1903,583 +1802,482 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_prepare(
 // uniqueness has already been performed (in __node_insert_multi_prepare), so
 // all we need to do is update the bucket and size(). Assumes that __cp->__hash
 // is up-to-date.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_perform(
-    __node_pointer __cp, __next_pointer __pn) _NOEXCEPT
-{
-    size_type __bc = bucket_count();
-    size_t __chash = __constrain_hash(__cp->__hash_, __bc);
-    if (__pn == nullptr)
-    {
-        __pn =__p1_.first().__ptr();
-        __cp->__next_ = __pn->__next_;
-        __pn->__next_ = __cp->__ptr();
-        // fix up __bucket_list_
-        __bucket_list_[__chash] = __pn;
-        if (__cp->__next_ != nullptr)
-            __bucket_list_[__constrain_hash(__cp->__next_->__hash(), __bc)]
-                = __cp->__ptr();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_multi_perform(
+    __node_pointer __cp, __next_pointer __pn) _NOEXCEPT {
+  size_type __bc = bucket_count();
+  size_t __chash = __constrain_hash(__cp->__hash_, __bc);
+  if (__pn == nullptr) {
+    __pn          = __p1_.first().__ptr();
+    __cp->__next_ = __pn->__next_;
+    __pn->__next_ = __cp->__ptr();
+    // fix up __bucket_list_
+    __bucket_list_[__chash] = __pn;
+    if (__cp->__next_ != nullptr)
+      __bucket_list_[__constrain_hash(__cp->__next_->__hash(), __bc)] = __cp->__ptr();
+  } else {
+    __cp->__next_ = __pn->__next_;
+    __pn->__next_ = __cp->__ptr();
+    if (__cp->__next_ != nullptr) {
+      size_t __nhash = __constrain_hash(__cp->__next_->__hash(), __bc);
+      if (__nhash != __chash)
+        __bucket_list_[__nhash] = __cp->__ptr();
     }
-    else
-    {
-        __cp->__next_ = __pn->__next_;
-        __pn->__next_ = __cp->__ptr();
-        if (__cp->__next_ != nullptr)
-        {
-            size_t __nhash = __constrain_hash(__cp->__next_->__hash(), __bc);
-            if (__nhash != __chash)
-                __bucket_list_[__nhash] = __cp->__ptr();
-        }
+  }
+  ++size();
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_multi(__node_pointer __cp) {
+  __cp->__hash_       = hash_function()(__cp->__value_);
+  __next_pointer __pn = __node_insert_multi_prepare(__cp->__hash(), __cp->__value_);
+  __node_insert_multi_perform(__cp, __pn);
+
+  return iterator(__cp->__ptr(), this);
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_insert_multi(const_iterator __p, __node_pointer __cp) {
+  _LIBCPP_DEBUG_ASSERT(
+      __get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
+      "unordered container::emplace_hint(const_iterator, args...) called with an iterator not"
+      " referring to this unordered container");
+  if (__p != end() && key_eq()(*__p, __cp->__value_)) {
+    __next_pointer __np = __p.__node_;
+    __cp->__hash_       = __np->__hash();
+    size_type __bc      = bucket_count();
+    if (size() + 1 > __bc * max_load_factor() || __bc == 0) {
+      rehash(_VSTD::max<size_type>(
+          2 * __bc + !__is_hash_power2(__bc), size_type(ceil(float(size() + 1) / max_load_factor()))));
+      __bc = bucket_count();
     }
+    size_t __chash      = __constrain_hash(__cp->__hash_, __bc);
+    __next_pointer __pp = __bucket_list_[__chash];
+    while (__pp->__next_ != __np)
+      __pp = __pp->__next_;
+    __cp->__next_ = __np;
+    __pp->__next_ = static_cast<__next_pointer>(__cp);
     ++size();
+    return iterator(static_cast<__next_pointer>(__cp), this);
+  }
+  return __node_insert_multi(__cp);
 }
 
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(__node_pointer __cp)
-{
-    __cp->__hash_ = hash_function()(__cp->__value_);
-    __next_pointer __pn = __node_insert_multi_prepare(__cp->__hash(), __cp->__value_);
-    __node_insert_multi_perform(__cp, __pn);
-
-    return iterator(__cp->__ptr(), this);
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(
-        const_iterator __p, __node_pointer __cp)
-{
-    _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
-                         "unordered container::emplace_hint(const_iterator, args...) called with an iterator not"
-                         " referring to this unordered container");
-    if (__p != end() && key_eq()(*__p, __cp->__value_))
-    {
-        __next_pointer __np = __p.__node_;
-        __cp->__hash_ = __np->__hash();
-        size_type __bc = bucket_count();
-        if (size()+1 > __bc * max_load_factor() || __bc == 0)
-        {
-            rehash(_VSTD::max<size_type>(2 * __bc + !__is_hash_power2(__bc),
-                           size_type(ceil(float(size() + 1) / max_load_factor()))));
-            __bc = bucket_count();
-        }
-        size_t __chash = __constrain_hash(__cp->__hash_, __bc);
-        __next_pointer __pp = __bucket_list_[__chash];
-        while (__pp->__next_ != __np)
-            __pp = __pp->__next_;
-        __cp->__next_ = __np;
-        __pp->__next_ = static_cast<__next_pointer>(__cp);
-        ++size();
-        return iterator(static_cast<__next_pointer>(__cp), this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _Key, class... _Args>
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__emplace_unique_key_args(_Key const& __k, _Args&&... __args) {
+  size_t __hash   = hash_function()(__k);
+  size_type __bc  = bucket_count();
+  bool __inserted = false;
+  __next_pointer __nd;
+  size_t __chash;
+  if (__bc != 0) {
+    __chash = __constrain_hash(__hash, __bc);
+    __nd    = __bucket_list_[__chash];
+    if (__nd != nullptr) {
+      for (__nd = __nd->__next_;
+           __nd != nullptr && (__nd->__hash() == __hash || __constrain_hash(__nd->__hash(), __bc) == __chash);
+           __nd = __nd->__next_) {
+        if (key_eq()(__nd->__upcast()->__value_, __k))
+          goto __done;
+      }
     }
-    return __node_insert_multi(__cp);
-}
-
-
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _Key, class ..._Args>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_unique_key_args(_Key const& __k, _Args&&... __args)
-{
-
-    size_t __hash = hash_function()(__k);
-    size_type __bc = bucket_count();
-    bool __inserted = false;
-    __next_pointer __nd;
-    size_t __chash;
-    if (__bc != 0)
-    {
-        __chash = __constrain_hash(__hash, __bc);
-        __nd = __bucket_list_[__chash];
-        if (__nd != nullptr)
-        {
-            for (__nd = __nd->__next_; __nd != nullptr &&
-                (__nd->__hash() == __hash || __constrain_hash(__nd->__hash(), __bc) == __chash);
-                                                           __nd = __nd->__next_)
-            {
-                if (key_eq()(__nd->__upcast()->__value_, __k))
-                    goto __done;
-            }
-        }
+  }
+  {
+    __node_holder __h = __construct_node_hash(__hash, _VSTD::forward<_Args>(__args)...);
+    if (size() + 1 > __bc * max_load_factor() || __bc == 0) {
+      rehash(_VSTD::max<size_type>(
+          2 * __bc + !__is_hash_power2(__bc), size_type(ceil(float(size() + 1) / max_load_factor()))));
+      __bc    = bucket_count();
+      __chash = __constrain_hash(__hash, __bc);
     }
-    {
-        __node_holder __h = __construct_node_hash(__hash, _VSTD::forward<_Args>(__args)...);
-        if (size()+1 > __bc * max_load_factor() || __bc == 0)
-        {
-            rehash(_VSTD::max<size_type>(2 * __bc + !__is_hash_power2(__bc),
-                           size_type(ceil(float(size() + 1) / max_load_factor()))));
-            __bc = bucket_count();
-            __chash = __constrain_hash(__hash, __bc);
-        }
-        // insert_after __bucket_list_[__chash], or __first_node if bucket is null
-        __next_pointer __pn = __bucket_list_[__chash];
-        if (__pn == nullptr)
-        {
-            __pn = __p1_.first().__ptr();
-            __h->__next_ = __pn->__next_;
-            __pn->__next_ = __h.get()->__ptr();
-            // fix up __bucket_list_
-            __bucket_list_[__chash] = __pn;
-            if (__h->__next_ != nullptr)
-                __bucket_list_[__constrain_hash(__h->__next_->__hash(), __bc)]
-                    = __h.get()->__ptr();
-        }
-        else
-        {
-            __h->__next_ = __pn->__next_;
-            __pn->__next_ = static_cast<__next_pointer>(__h.get());
-        }
-        __nd = static_cast<__next_pointer>(__h.release());
-        // increment size
-        ++size();
-        __inserted = true;
+    // insert_after __bucket_list_[__chash], or __first_node if bucket is null
+    __next_pointer __pn = __bucket_list_[__chash];
+    if (__pn == nullptr) {
+      __pn          = __p1_.first().__ptr();
+      __h->__next_  = __pn->__next_;
+      __pn->__next_ = __h.get()->__ptr();
+      // fix up __bucket_list_
+      __bucket_list_[__chash] = __pn;
+      if (__h->__next_ != nullptr)
+        __bucket_list_[__constrain_hash(__h->__next_->__hash(), __bc)] = __h.get()->__ptr();
+    } else {
+      __h->__next_  = __pn->__next_;
+      __pn->__next_ = static_cast<__next_pointer>(__h.get());
     }
+    __nd = static_cast<__next_pointer>(__h.release());
+    // increment size
+    ++size();
+    __inserted = true;
+  }
 __done:
     return pair<iterator, bool>(iterator(__nd, this), __inserted);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class... _Args>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_unique_impl(_Args&&... __args)
-{
-    __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
-    pair<iterator, bool> __r = __node_insert_unique(__h.get());
-    if (__r.second)
-        __h.release();
-    return __r;
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__emplace_unique_impl(_Args&&... __args) {
+  __node_holder __h        = __construct_node(_VSTD::forward<_Args>(__args)...);
+  pair<iterator, bool> __r = __node_insert_unique(__h.get());
+  if (__r.second)
+    __h.release();
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class... _Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_multi(_Args&&... __args)
-{
-    __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
-    iterator __r = __node_insert_multi(__h.get());
-    __h.release();
-    return __r;
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__emplace_multi(_Args&&... __args) {
+  __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
+  iterator __r      = __node_insert_multi(__h.get());
+  __h.release();
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class... _Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_hint_multi(
-        const_iterator __p, _Args&&... __args)
-{
-    _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
-                         "unordered container::emplace_hint(const_iterator, args...) called with an iterator not"
-                         " referring to this unordered container");
-    __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
-    iterator __r = __node_insert_multi(__p, __h.get());
-    __h.release();
-    return __r;
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__emplace_hint_multi(const_iterator __p, _Args&&... __args) {
+  _LIBCPP_DEBUG_ASSERT(
+      __get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
+      "unordered container::emplace_hint(const_iterator, args...) called with an iterator not"
+      " referring to this unordered container");
+  __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
+  iterator __r      = __node_insert_multi(__p, __h.get());
+  __h.release();
+  return __r;
 }
 
 #if _LIBCPP_STD_VER > 14
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _NodeHandle, class _InsertReturnType>
-_LIBCPP_INLINE_VISIBILITY
-_InsertReturnType
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
-    _NodeHandle&& __nh)
-{
-    if (__nh.empty())
-        return _InsertReturnType{end(), false, _NodeHandle()};
-    pair<iterator, bool> __result = __node_insert_unique(__nh.__ptr_);
-    if (__result.second)
-        __nh.__release_ptr();
-    return _InsertReturnType{__result.first, __result.second, _VSTD::move(__nh)};
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _NodeHandle>
-_LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
-    const_iterator, _NodeHandle&& __nh)
-{
-    if (__nh.empty())
-        return end();
-    pair<iterator, bool> __result = __node_insert_unique(__nh.__ptr_);
-    if (__result.second)
-        __nh.__release_ptr();
-    return __result.first;
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _NodeHandle>
-_LIBCPP_INLINE_VISIBILITY
-_NodeHandle
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_extract(
-    key_type const& __key)
-{
-    iterator __i = find(__key);
-    if (__i == end())
-        return _NodeHandle();
-    return __node_handle_extract<_NodeHandle>(__i);
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _NodeHandle>
-_LIBCPP_INLINE_VISIBILITY
-_NodeHandle
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_extract(
-    const_iterator __p)
-{
-    allocator_type __alloc(__node_alloc());
-    return _NodeHandle(remove(__p).release(), __alloc);
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _Table>
-_LIBCPP_INLINE_VISIBILITY
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_unique(
-    _Table& __source)
-{
-    static_assert(is_same<__node, typename _Table::__node>::value, "");
-
-    for (typename _Table::iterator __it = __source.begin();
-         __it != __source.end();)
-    {
-        __node_pointer __src_ptr = __it.__node_->__upcast();
-        size_t __hash = hash_function()(__src_ptr->__value_);
-        __next_pointer __existing_node =
-            __node_insert_unique_prepare(__hash, __src_ptr->__value_);
-        auto __prev_iter = __it++;
-        if (__existing_node == nullptr)
-        {
-            (void)__source.remove(__prev_iter).release();
-            __src_ptr->__hash_ = __hash;
-            __node_insert_unique_perform(__src_ptr);
-        }
-    }
-}
-
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _NodeHandle>
-_LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
-    _NodeHandle&& __nh)
-{
-    if (__nh.empty())
-        return end();
-    iterator __result = __node_insert_multi(__nh.__ptr_);
+_LIBCPP_INLINE_VISIBILITY _InsertReturnType
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_insert_unique(_NodeHandle&& __nh) {
+  if (__nh.empty())
+    return _InsertReturnType{end(), false, _NodeHandle()};
+  pair<iterator, bool> __result = __node_insert_unique(__nh.__ptr_);
+  if (__result.second)
     __nh.__release_ptr();
-    return __result;
+  return _InsertReturnType{__result.first, __result.second, _VSTD::move(__nh)};
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _NodeHandle>
-_LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
-    const_iterator __hint, _NodeHandle&& __nh)
-{
-    if (__nh.empty())
-        return end();
-    iterator __result = __node_insert_multi(__hint, __nh.__ptr_);
+_LIBCPP_INLINE_VISIBILITY typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_insert_unique(const_iterator, _NodeHandle&& __nh) {
+  if (__nh.empty())
+    return end();
+  pair<iterator, bool> __result = __node_insert_unique(__nh.__ptr_);
+  if (__result.second)
     __nh.__release_ptr();
-    return __result;
+  return __result.first;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _Table>
-_LIBCPP_INLINE_VISIBILITY
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_multi(
-    _Table& __source)
-{
-    static_assert(is_same<typename _Table::__node, __node>::value, "");
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _NodeHandle>
+_LIBCPP_INLINE_VISIBILITY _NodeHandle
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_extract(key_type const& __key) {
+  iterator __i = find(__key);
+  if (__i == end())
+    return _NodeHandle();
+  return __node_handle_extract<_NodeHandle>(__i);
+}
 
-    for (typename _Table::iterator __it = __source.begin();
-         __it != __source.end();)
-    {
-        __node_pointer __src_ptr = __it.__node_->__upcast();
-        size_t __src_hash = hash_function()(__src_ptr->__value_);
-        __next_pointer __pn =
-            __node_insert_multi_prepare(__src_hash, __src_ptr->__value_);
-        (void)__source.remove(__it++).release();
-        __src_ptr->__hash_ = __src_hash;
-        __node_insert_multi_perform(__src_ptr, __pn);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _NodeHandle>
+_LIBCPP_INLINE_VISIBILITY _NodeHandle
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_extract(const_iterator __p) {
+  allocator_type __alloc(__node_alloc());
+  return _NodeHandle(remove(__p).release(), __alloc);
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _Table>
+_LIBCPP_INLINE_VISIBILITY void
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_merge_unique(_Table& __source) {
+  static_assert(is_same<__node, typename _Table::__node>::value, "");
+
+  for (typename _Table::iterator __it = __source.begin(); __it != __source.end();) {
+    __node_pointer __src_ptr       = __it.__node_->__upcast();
+    size_t __hash                  = hash_function()(__src_ptr->__value_);
+    __next_pointer __existing_node = __node_insert_unique_prepare(__hash, __src_ptr->__value_);
+    auto __prev_iter               = __it++;
+    if (__existing_node == nullptr) {
+      (void)__source.remove(__prev_iter).release();
+      __src_ptr->__hash_ = __hash;
+      __node_insert_unique_perform(__src_ptr);
     }
+  }
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _NodeHandle>
+_LIBCPP_INLINE_VISIBILITY typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_insert_multi(_NodeHandle&& __nh) {
+  if (__nh.empty())
+    return end();
+  iterator __result = __node_insert_multi(__nh.__ptr_);
+  __nh.__release_ptr();
+  return __result;
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _NodeHandle>
+_LIBCPP_INLINE_VISIBILITY typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_insert_multi(
+    const_iterator __hint, _NodeHandle&& __nh) {
+  if (__nh.empty())
+    return end();
+  iterator __result = __node_insert_multi(__hint, __nh.__ptr_);
+  __nh.__release_ptr();
+  return __result;
+}
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _Table>
+_LIBCPP_INLINE_VISIBILITY void
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_handle_merge_multi(_Table& __source) {
+  static_assert(is_same<typename _Table::__node, __node>::value, "");
+
+  for (typename _Table::iterator __it = __source.begin(); __it != __source.end();) {
+    __node_pointer __src_ptr = __it.__node_->__upcast();
+    size_t __src_hash        = hash_function()(__src_ptr->__value_);
+    __next_pointer __pn      = __node_insert_multi_prepare(__src_hash, __src_ptr->__value_);
+    (void)__source.remove(__it++).release();
+    __src_ptr->__hash_ = __src_hash;
+    __node_insert_multi_perform(__src_ptr, __pn);
+  }
 }
 #endif // _LIBCPP_STD_VER > 14
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::rehash(size_type __n)
-_LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK
-{
-    if (__n == 1)
-        __n = 2;
-    else if (__n & (__n - 1))
-        __n = __next_prime(__n);
-    size_type __bc = bucket_count();
-    if (__n > __bc)
-        __rehash(__n);
-    else if (__n < __bc)
-    {
-        __n = _VSTD::max<size_type>
-              (
-                  __n,
-                  __is_hash_power2(__bc) ? __next_hash_pow2(size_t(ceil(float(size()) / max_load_factor()))) :
-                                           __next_prime(size_t(ceil(float(size()) / max_load_factor())))
-              );
-        if (__n < __bc)
-            __rehash(__n);
-    }
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::rehash(size_type __n)
+    _LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK {
+  if (__n == 1)
+    __n = 2;
+  else if (__n & (__n - 1))
+    __n = __next_prime(__n);
+  size_type __bc = bucket_count();
+  if (__n > __bc)
+    __rehash(__n);
+  else if (__n < __bc) {
+    __n = _VSTD::max<size_type>(
+        __n,
+        __is_hash_power2(__bc)
+            ? __next_hash_pow2(size_t(ceil(float(size()) / max_load_factor())))
+            : __next_prime(size_t(ceil(float(size()) / max_load_factor()))));
+    if (__n < __bc)
+      __rehash(__n);
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__rehash(size_type __nbc)
-{
-    std::__debug_db_invalidate_all(this);
-    __pointer_allocator& __npa = __bucket_list_.get_deleter().__alloc();
-    __bucket_list_.reset(__nbc > 0 ?
-                      __pointer_alloc_traits::allocate(__npa, __nbc) : nullptr);
-    __bucket_list_.get_deleter().size() = __nbc;
-    if (__nbc > 0)
-    {
-        for (size_type __i = 0; __i < __nbc; ++__i)
-            __bucket_list_[__i] = nullptr;
-        __next_pointer __pp = __p1_.first().__ptr();
-        __next_pointer __cp = __pp->__next_;
-        if (__cp != nullptr)
-        {
-            size_type __chash = __constrain_hash(__cp->__hash(), __nbc);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__rehash(size_type __nbc) {
+  std::__debug_db_invalidate_all(this);
+  __pointer_allocator& __npa = __bucket_list_.get_deleter().__alloc();
+  __bucket_list_.reset(__nbc > 0 ? __pointer_alloc_traits::allocate(__npa, __nbc) : nullptr);
+  __bucket_list_.get_deleter().size() = __nbc;
+  if (__nbc > 0) {
+    for (size_type __i = 0; __i < __nbc; ++__i)
+      __bucket_list_[__i] = nullptr;
+    __next_pointer __pp = __p1_.first().__ptr();
+    __next_pointer __cp = __pp->__next_;
+    if (__cp != nullptr) {
+      size_type __chash       = __constrain_hash(__cp->__hash(), __nbc);
+      __bucket_list_[__chash] = __pp;
+      size_type __phash       = __chash;
+      for (__pp = __cp, void(), __cp = __cp->__next_; __cp != nullptr; __cp = __pp->__next_) {
+        __chash = __constrain_hash(__cp->__hash(), __nbc);
+        if (__chash == __phash)
+          __pp = __cp;
+        else {
+          if (__bucket_list_[__chash] == nullptr) {
             __bucket_list_[__chash] = __pp;
-            size_type __phash = __chash;
-            for (__pp = __cp, void(), __cp = __cp->__next_; __cp != nullptr;
-                                                           __cp = __pp->__next_)
-            {
-                __chash = __constrain_hash(__cp->__hash(), __nbc);
-                if (__chash == __phash)
-                    __pp = __cp;
-                else
-                {
-                    if (__bucket_list_[__chash] == nullptr)
-                    {
-                        __bucket_list_[__chash] = __pp;
-                        __pp = __cp;
-                        __phash = __chash;
-                    }
-                    else
-                    {
-                        __next_pointer __np = __cp;
-                        for (; __np->__next_ != nullptr &&
-                               key_eq()(__cp->__upcast()->__value_,
-                                        __np->__next_->__upcast()->__value_);
-                                                           __np = __np->__next_)
-                            ;
-                        __pp->__next_ = __np->__next_;
-                        __np->__next_ = __bucket_list_[__chash]->__next_;
-                        __bucket_list_[__chash]->__next_ = __cp;
-
-                    }
-                }
+            __pp                    = __cp;
+            __phash                 = __chash;
+          } else {
+            __next_pointer __np = __cp;
+            if (!__unique_keys::value) {
+              for (; __np->__next_ != nullptr &&
+                     key_eq()(__cp->__upcast()->__value_, __np->__next_->__upcast()->__value_);
+                   __np = __np->__next_)
+                ;
             }
+            __pp->__next_                    = __np->__next_;
+            __np->__next_                    = __bucket_list_[__chash]->__next_;
+            __bucket_list_[__chash]->__next_ = __cp;
+          }
         }
+      }
     }
+  }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k)
-{
-    size_t __hash = hash_function()(__k);
-    size_type __bc = bucket_count();
-    if (__bc != 0)
-    {
-        size_t __chash = __constrain_hash(__hash, __bc);
-        __next_pointer __nd = __bucket_list_[__chash];
-        if (__nd != nullptr)
-        {
-            for (__nd = __nd->__next_; __nd != nullptr &&
-                (__nd->__hash() == __hash
-                  || __constrain_hash(__nd->__hash(), __bc) == __chash);
-                                                           __nd = __nd->__next_)
-            {
-                if ((__nd->__hash() == __hash)
-                    && key_eq()(__nd->__upcast()->__value_, __k))
-                    return iterator(__nd, this);
-            }
-        }
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::find(const _Key& __k) {
+  size_t __hash  = hash_function()(__k);
+  size_type __bc = bucket_count();
+  if (__bc != 0) {
+    size_t __chash      = __constrain_hash(__hash, __bc);
+    __next_pointer __nd = __bucket_list_[__chash];
+    if (__nd != nullptr) {
+      for (__nd = __nd->__next_;
+           __nd != nullptr && (__nd->__hash() == __hash || __constrain_hash(__nd->__hash(), __bc) == __chash);
+           __nd = __nd->__next_) {
+        if ((__nd->__hash() == __hash) && key_eq()(__nd->__upcast()->__value_, __k))
+          return iterator(__nd, this);
+      }
     }
-    return end();
+  }
+  return end();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k) const
-{
-    size_t __hash = hash_function()(__k);
-    size_type __bc = bucket_count();
-    if (__bc != 0)
-    {
-        size_t __chash = __constrain_hash(__hash, __bc);
-        __next_pointer __nd = __bucket_list_[__chash];
-        if (__nd != nullptr)
-        {
-            for (__nd = __nd->__next_; __nd != nullptr &&
-                (__hash == __nd->__hash()
-                    || __constrain_hash(__nd->__hash(), __bc) == __chash);
-                                                           __nd = __nd->__next_)
-            {
-                if ((__nd->__hash() == __hash)
-                    && key_eq()(__nd->__upcast()->__value_, __k))
-                    return const_iterator(__nd, this);
-            }
-        }
-
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::find(const _Key& __k) const {
+  size_t __hash  = hash_function()(__k);
+  size_type __bc = bucket_count();
+  if (__bc != 0) {
+    size_t __chash      = __constrain_hash(__hash, __bc);
+    __next_pointer __nd = __bucket_list_[__chash];
+    if (__nd != nullptr) {
+      for (__nd = __nd->__next_;
+           __nd != nullptr && (__hash == __nd->__hash() || __constrain_hash(__nd->__hash(), __bc) == __chash);
+           __nd = __nd->__next_) {
+        if ((__nd->__hash() == __hash) && key_eq()(__nd->__upcast()->__value_, __k))
+          return const_iterator(__nd, this);
+      }
     }
-    return end();
+  }
+  return end();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class ..._Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node(_Args&& ...__args)
-{
-    static_assert(!__is_hash_value_type<_Args...>::value,
-                  "Construct cannot be called with a hash value type");
-    __node_allocator& __na = __node_alloc();
-    __node_holder __h(__node_traits::allocate(__na, 1), _Dp(__na));
-    __node_traits::construct(__na, _NodeTypes::__get_ptr(__h->__value_), _VSTD::forward<_Args>(__args)...);
-    __h.get_deleter().__value_constructed = true;
-    __h->__hash_ = hash_function()(__h->__value_);
-    __h->__next_ = nullptr;
-    return __h;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class... _Args>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__construct_node(_Args&&... __args) {
+  static_assert(!__is_hash_value_type<_Args...>::value, "Construct cannot be called with a hash value type");
+  __node_allocator& __na = __node_alloc();
+  __node_holder __h(__node_traits::allocate(__na, 1), _Dp(__na));
+  __node_traits::construct(__na, _NodeTypes::__get_ptr(__h->__value_), _VSTD::forward<_Args>(__args)...);
+  __h.get_deleter().__value_constructed = true;
+  __h->__hash_                          = hash_function()(__h->__value_);
+  __h->__next_                          = nullptr;
+  return __h;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-template <class _First, class ..._Rest>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node_hash(
-    size_t __hash, _First&& __f, _Rest&& ...__rest)
-{
-    static_assert(!__is_hash_value_type<_First, _Rest...>::value,
-                  "Construct cannot be called with a hash value type");
-    __node_allocator& __na = __node_alloc();
-    __node_holder __h(__node_traits::allocate(__na, 1), _Dp(__na));
-    __node_traits::construct(__na, _NodeTypes::__get_ptr(__h->__value_),
-                             _VSTD::forward<_First>(__f),
-                             _VSTD::forward<_Rest>(__rest)...);
-    __h.get_deleter().__value_constructed = true;
-    __h->__hash_ = __hash;
-    __h->__next_ = nullptr;
-    return __h;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+template <class _First, class... _Rest>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__construct_node_hash(
+    size_t __hash, _First&& __f, _Rest&&... __rest) {
+  static_assert(!__is_hash_value_type<_First, _Rest...>::value, "Construct cannot be called with a hash value type");
+  __node_allocator& __na = __node_alloc();
+  __node_holder __h(__node_traits::allocate(__na, 1), _Dp(__na));
+  __node_traits::construct(
+      __na, _NodeTypes::__get_ptr(__h->__value_), _VSTD::forward<_First>(__f), _VSTD::forward<_Rest>(__rest)...);
+  __h.get_deleter().__value_constructed = true;
+  __h->__hash_                          = __hash;
+  __h->__next_                          = nullptr;
+  return __h;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __p)
-{
-    __next_pointer __np = __p.__node_;
-    _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
-                         "unordered container erase(iterator) called with an iterator not"
-                         " referring to this container");
-    _LIBCPP_ASSERT(__p != end(),
-                   "unordered container erase(iterator) called with a non-dereferenceable iterator");
-    iterator __r(__np, this);
-    ++__r;
-    remove(__p);
-    return __r;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::erase(const_iterator __p) {
+  __next_pointer __np = __p.__node_;
+  _LIBCPP_DEBUG_ASSERT(
+      __get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
+      "unordered container erase(iterator) called with an iterator not"
+      " referring to this container");
+  _LIBCPP_ASSERT(__p != end(), "unordered container erase(iterator) called with a non-dereferenceable iterator");
+  iterator __r(__np, this);
+  ++__r;
+  remove(__p);
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __first,
-                                                const_iterator __last)
-{
-    _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__first)) == this,
-                         "unordered container::erase(iterator, iterator) called with an iterator not"
-                         " referring to this container");
-    _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__last)) == this,
-                         "unordered container::erase(iterator, iterator) called with an iterator not"
-                         " referring to this container");
-    for (const_iterator __p = __first; __first != __last; __p = __first)
-    {
-        ++__first;
-        erase(__p);
-    }
-    __next_pointer __np = __last.__node_;
-    return iterator (__np, this);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::erase(const_iterator __first, const_iterator __last) {
+  _LIBCPP_DEBUG_ASSERT(
+      __get_const_db()->__find_c_from_i(_VSTD::addressof(__first)) == this,
+      "unordered container::erase(iterator, iterator) called with an iterator not"
+      " referring to this container");
+  _LIBCPP_DEBUG_ASSERT(
+      __get_const_db()->__find_c_from_i(_VSTD::addressof(__last)) == this,
+      "unordered container::erase(iterator, iterator) called with an iterator not"
+      " referring to this container");
+  for (const_iterator __p = __first; __first != __last; __p = __first) {
+    ++__first;
+    erase(__p);
+  }
+  __next_pointer __np = __last.__node_;
+  return iterator(__np, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_unique(const _Key& __k)
-{
-    iterator __i = find(__k);
-    if (__i == end())
-        return 0;
-    erase(__i);
-    return 1;
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__erase_unique(const _Key& __k) {
+  iterator __i = find(__k);
+  if (__i == end())
+    return 0;
+  erase(__i);
+  return 1;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_multi(const _Key& __k)
-{
-    size_type __r = 0;
-    iterator __i = find(__k);
-    if (__i != end())
-    {
-        iterator __e = end();
-        do
-        {
-            erase(__i++);
-            ++__r;
-        } while (__i != __e && key_eq()(*__i, __k));
-    }
-    return __r;
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__erase_multi(const _Key& __k) {
+  size_type __r = 0;
+  iterator __i  = find(__k);
+  if (__i != end()) {
+    iterator __e = end();
+    do {
+      erase(__i++);
+      ++__r;
+    } while (__i != __e && key_eq()(*__i, __k));
+  }
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::remove(const_iterator __p) _NOEXCEPT
-{
-    // current node
-    __next_pointer __cn = __p.__node_;
-    size_type __bc = bucket_count();
-    size_t __chash = __constrain_hash(__cn->__hash(), __bc);
-    // find previous node
-    __next_pointer __pn = __bucket_list_[__chash];
-    for (; __pn->__next_ != __cn; __pn = __pn->__next_)
-        ;
-    // Fix up __bucket_list_
-        // if __pn is not in same bucket (before begin is not in same bucket) &&
-        //    if __cn->__next_ is not in same bucket (nullptr is not in same bucket)
-    if (__pn == __p1_.first().__ptr()
-            || __constrain_hash(__pn->__hash(), __bc) != __chash)
-    {
-        if (__cn->__next_ == nullptr
-            || __constrain_hash(__cn->__next_->__hash(), __bc) != __chash)
-            __bucket_list_[__chash] = nullptr;
-    }
-        // if __cn->__next_ is not in same bucket (nullptr is in same bucket)
-    if (__cn->__next_ != nullptr)
-    {
-        size_t __nhash = __constrain_hash(__cn->__next_->__hash(), __bc);
-        if (__nhash != __chash)
-            __bucket_list_[__nhash] = __pn;
-    }
-    // remove __cn
-    __pn->__next_ = __cn->__next_;
-    __cn->__next_ = nullptr;
-    --size();
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::remove(const_iterator __p) _NOEXCEPT {
+  // current node
+  __next_pointer __cn = __p.__node_;
+  size_type __bc      = bucket_count();
+  size_t __chash      = __constrain_hash(__cn->__hash(), __bc);
+  // find previous node
+  __next_pointer __pn = __bucket_list_[__chash];
+  for (; __pn->__next_ != __cn; __pn = __pn->__next_)
+    ;
+  // Fix up __bucket_list_
+  // if __pn is not in same bucket (before begin is not in same bucket) &&
+  //    if __cn->__next_ is not in same bucket (nullptr is not in same bucket)
+  if (__pn == __p1_.first().__ptr() || __constrain_hash(__pn->__hash(), __bc) != __chash) {
+    if (__cn->__next_ == nullptr || __constrain_hash(__cn->__next_->__hash(), __bc) != __chash)
+      __bucket_list_[__chash] = nullptr;
+  }
+  // if __cn->__next_ is not in same bucket (nullptr is in same bucket)
+  if (__cn->__next_ != nullptr) {
+    size_t __nhash = __constrain_hash(__cn->__next_->__hash(), __bc);
+    if (__nhash != __chash)
+      __bucket_list_[__nhash] = __pn;
+  }
+  // remove __cn
+  __pn->__next_ = __cn->__next_;
+  __cn->__next_ = nullptr;
+  --size();
 #ifdef _LIBCPP_ENABLE_DEBUG_MODE
     __c_node* __c = __get_db()->__find_c_and_lock(this);
     for (__i_node** __dp = __c->end_; __dp != __c->beg_; )
@@ -2498,115 +2296,95 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::remove(const_iterator __p) _NOEXCEPT
     return __node_holder(__cn->__upcast(), _Dp(__node_alloc(), true));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__count_unique(const _Key& __k) const
-{
-    return static_cast<size_type>(find(__k) != end());
+inline typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__count_unique(const _Key& __k) const {
+  return static_cast<size_type>(find(__k) != end());
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__count_multi(const _Key& __k) const
-{
-    size_type __r = 0;
-    const_iterator __i = find(__k);
-    if (__i != end())
-    {
-        const_iterator __e = end();
-        do
-        {
-            ++__i;
-            ++__r;
-        } while (__i != __e && key_eq()(*__i, __k));
-    }
-    return __r;
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__count_multi(const _Key& __k) const {
+  size_type __r      = 0;
+  const_iterator __i = find(__k);
+  if (__i != end()) {
+    const_iterator __e = end();
+    do {
+      ++__i;
+      ++__r;
+    } while (__i != __e && key_eq()(*__i, __k));
+  }
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
-        const _Key& __k)
-{
-    iterator __i = find(__k);
-    iterator __j = __i;
-    if (__i != end())
-        ++__j;
-    return pair<iterator, iterator>(__i, __j);
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__equal_range_unique(const _Key& __k) {
+  iterator __i = find(__k);
+  iterator __j = __i;
+  if (__i != end())
+    ++__j;
+  return pair<iterator, iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
-        const _Key& __k) const
-{
-    const_iterator __i = find(__k);
-    const_iterator __j = __i;
-    if (__i != end())
-        ++__j;
-    return pair<const_iterator, const_iterator>(__i, __j);
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__equal_range_unique(const _Key& __k) const {
+  const_iterator __i = find(__k);
+  const_iterator __j = __i;
+  if (__i != end())
+    ++__j;
+  return pair<const_iterator, const_iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
-        const _Key& __k)
-{
-    iterator __i = find(__k);
-    iterator __j = __i;
-    if (__i != end())
-    {
-        iterator __e = end();
-        do
-        {
-            ++__j;
-        } while (__j != __e && key_eq()(*__j, __k));
-    }
-    return pair<iterator, iterator>(__i, __j);
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__equal_range_multi(const _Key& __k) {
+  iterator __i = find(__k);
+  iterator __j = __i;
+  if (__i != end()) {
+    iterator __e = end();
+    do {
+      ++__j;
+    } while (__j != __e && key_eq()(*__j, __k));
+  }
+  return pair<iterator, iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
-        const _Key& __k) const
-{
-    const_iterator __i = find(__k);
-    const_iterator __j = __i;
-    if (__i != end())
-    {
-        const_iterator __e = end();
-        do
-        {
-            ++__j;
-        } while (__j != __e && key_eq()(*__j, __k));
-    }
-    return pair<const_iterator, const_iterator>(__i, __j);
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::const_iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__equal_range_multi(const _Key& __k) const {
+  const_iterator __i = find(__k);
+  const_iterator __j = __i;
+  if (__i != end()) {
+    const_iterator __e = end();
+    do {
+      ++__j;
+    } while (__j != __e && key_eq()(*__j, __k));
+  }
+  return pair<const_iterator, const_iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+void __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::swap(__hash_table& __u)
 #if _LIBCPP_STD_VER <= 11
     _NOEXCEPT_(
-        __is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value
-        && (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value
-              || __is_nothrow_swappable<__pointer_allocator>::value)
-        && (!__node_traits::propagate_on_container_swap::value
-              || __is_nothrow_swappable<__node_allocator>::value)
-            )
+        __is_nothrow_swappable<hasher>::value&& __is_nothrow_swappable<key_equal>::value &&
+        (!allocator_traits<__pointer_allocator>::propagate_on_container_swap::value ||
+         __is_nothrow_swappable<__pointer_allocator>::value) &&
+        (!__node_traits::propagate_on_container_swap::value || __is_nothrow_swappable<__node_allocator>::value))
 #else
-  _NOEXCEPT_(__is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value)
+    _NOEXCEPT_(__is_nothrow_swappable<hasher>::value&& __is_nothrow_swappable<key_equal>::value)
 #endif
 {
     _LIBCPP_ASSERT(__node_traits::propagate_on_container_swap::value ||
@@ -2634,63 +2412,48 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
     std::__debug_db_swap(this, std::addressof(__u));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::bucket_size(size_type __n) const
-{
-    _LIBCPP_ASSERT(__n < bucket_count(),
-        "unordered container::bucket_size(n) called with n >= bucket_count()");
-    __next_pointer __np = __bucket_list_[__n];
-    size_type __bc = bucket_count();
-    size_type __r = 0;
-    if (__np != nullptr)
-    {
-        for (__np = __np->__next_; __np != nullptr &&
-                                   __constrain_hash(__np->__hash(), __bc) == __n;
-                                                    __np = __np->__next_, (void) ++__r)
-            ;
-    }
-    return __r;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::bucket_size(size_type __n) const {
+  _LIBCPP_ASSERT(__n < bucket_count(), "unordered container::bucket_size(n) called with n >= bucket_count()");
+  __next_pointer __np = __bucket_list_[__n];
+  size_type __bc      = bucket_count();
+  size_type __r       = 0;
+  if (__np != nullptr) {
+    for (__np = __np->__next_; __np != nullptr && __constrain_hash(__np->__hash(), __bc) == __n; __np = __np->__next_,
+        (void)++__r)
+      ;
+  }
+  return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-inline _LIBCPP_INLINE_VISIBILITY
-void
-swap(__hash_table<_Tp, _Hash, _Equal, _Alloc>& __x,
-     __hash_table<_Tp, _Hash, _Equal, _Alloc>& __y)
-    _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y)))
-{
-    __x.swap(__y);
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+inline _LIBCPP_INLINE_VISIBILITY void
+swap(__hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>& __x, __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>& __y)
+    _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y))) {
+  __x.swap(__y);
 }
 
 #ifdef _LIBCPP_ENABLE_DEBUG_MODE
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__dereferenceable(const const_iterator* __i) const
-{
-    return __i->__node_ != nullptr;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+bool __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__dereferenceable(const const_iterator* __i) const {
+  return __i->__node_ != nullptr;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__decrementable(const const_iterator*) const
-{
-    return false;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+bool __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__decrementable(const const_iterator*) const {
+  return false;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__addable(const const_iterator*, ptrdiff_t) const
-{
-    return false;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+bool __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__addable(const const_iterator*, ptrdiff_t) const {
+  return false;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__subscriptable(const const_iterator*, ptrdiff_t) const
-{
-    return false;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _Traits>
+bool __hash_table<_Tp, _Hash, _Equal, _Alloc, _Traits>::__subscriptable(const const_iterator*, ptrdiff_t) const {
+  return false;
 }
 
 #endif // _LIBCPP_ENABLE_DEBUG_MODE

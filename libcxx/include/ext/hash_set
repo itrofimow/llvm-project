@@ -229,9 +229,9 @@ public:
     typedef const value_type&                                          const_reference;
 
 private:
-    typedef std::__hash_table<value_type, hasher, key_equal, allocator_type> __table;
+  typedef std::__hash_table<value_type, hasher, key_equal, allocator_type, std::__hash_table_traits<true>> __table;
 
-    __table __table_;
+  __table __table_;
 
 public:
     typedef typename __table::pointer         pointer;
@@ -450,9 +450,9 @@ public:
     typedef const value_type&                                          const_reference;
 
 private:
-    typedef std::__hash_table<value_type, hasher, key_equal, allocator_type> __table;
+  typedef std::__hash_table<value_type, hasher, key_equal, allocator_type, std::__hash_table_traits<false>> __table;
 
-    __table __table_;
+  __table __table_;
 
 public:
     typedef typename __table::pointer         pointer;
