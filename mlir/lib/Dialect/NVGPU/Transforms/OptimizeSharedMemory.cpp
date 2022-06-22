@@ -64,7 +64,7 @@ static Value permuteVectorOffset(OpBuilder &b, Location loc,
   int64_t M = llvm::Log2_64(memrefTy.getDimSize(tgtDim));
 
   // Capture bits[0:(M-N)] of src by first creating a (M-N) mask.
-  int64_t mask = (1 << (M - N)) - 1;
+  int64_t mask = (1LL << (M - N)) - 1;
   if (permuteEveryN > 1)
     mask = mask << llvm::Log2_64(permuteEveryN);
   Value srcBits = b.create<arith::ConstantIndexOp>(loc, mask);
@@ -101,9 +101,9 @@ static void transformIndices(OpBuilder &builder, Location loc,
 
 Operation::operand_range getIndices(Operation *op) {
   if (auto ldmatrixOp = dyn_cast<LdMatrixOp>(op))
-    return ldmatrixOp.indices();
+    return ldmatrixOp.getIndices();
   if (auto copyOp = dyn_cast<DeviceAsyncCopyOp>(op))
-    return copyOp.dstIndices();
+    return copyOp.getDstIndices();
   if (auto loadOp = dyn_cast<memref::LoadOp>(op))
     return loadOp.indices();
   if (auto storeOp = dyn_cast<memref::StoreOp>(op))
@@ -117,9 +117,9 @@ Operation::operand_range getIndices(Operation *op) {
 
 void setIndices(Operation *op, ArrayRef<Value> indices) {
   if (auto ldmatrixOp = dyn_cast<LdMatrixOp>(op))
-    return ldmatrixOp.indicesMutable().assign(indices);
+    return ldmatrixOp.getIndicesMutable().assign(indices);
   if (auto copyOp = dyn_cast<DeviceAsyncCopyOp>(op))
-    return copyOp.dstIndicesMutable().assign(indices);
+    return copyOp.getDstIndicesMutable().assign(indices);
   if (auto loadOp = dyn_cast<memref::LoadOp>(op))
     return loadOp.indicesMutable().assign(indices);
   if (auto storeOp = dyn_cast<memref::StoreOp>(op))
@@ -191,7 +191,7 @@ mlir::nvgpu::optimizeSharedMemoryReadsAndWrites(Operation *parentOp,
       (8 * kSharedMemoryLineSizeBytes / memRefType.getElementTypeBitWidth()) /
       rowSize;
   const int64_t threadGroupSize =
-      1 << (7 - llvm::Log2_64(kDefaultVectorSizeBits / 8));
+      1LL << (7 - llvm::Log2_64(kDefaultVectorSizeBits / 8));
   if (rowsPerLine >= threadGroupSize)
     return failure();
 

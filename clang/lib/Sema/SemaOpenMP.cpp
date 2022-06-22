@@ -2395,7 +2395,7 @@ OpenMPClauseKind Sema::isOpenMPPrivateDecl(ValueDecl *D, unsigned Level,
   // User-defined allocators are private since they must be defined in the
   // context of target region.
   if (DSAStack->hasExplicitDirective(isOpenMPTargetExecutionDirective, Level) &&
-      DSAStack->isUsesAllocatorsDecl(Level, D).getValueOr(
+      DSAStack->isUsesAllocatorsDecl(Level, D).value_or(
           DSAStackTy::UsesAllocatorsDeclKind::AllocatorTrait) ==
           DSAStackTy::UsesAllocatorsDeclKind::UserDefinedAllocator)
     return OMPC_private;
@@ -3540,7 +3540,7 @@ public:
           !Stack->isImplicitTaskFirstprivate(VD))
         return;
       // Skip allocators in uses_allocators clauses.
-      if (Stack->isUsesAllocatorsDecl(VD).hasValue())
+      if (Stack->isUsesAllocatorsDecl(VD))
         return;
 
       DSAStackTy::DSAVarData DVar = Stack->getTopDSA(VD, /*FromParent=*/false);
@@ -5189,8 +5189,7 @@ class AllocatorChecker final : public ConstStmtVisitor<AllocatorChecker, bool> {
 public:
   bool VisitDeclRefExpr(const DeclRefExpr *E) {
     return S->isUsesAllocatorsDecl(E->getDecl())
-               .getValueOr(
-                   DSAStackTy::UsesAllocatorsDeclKind::AllocatorTrait) ==
+               .value_or(DSAStackTy::UsesAllocatorsDeclKind::AllocatorTrait) ==
            DSAStackTy::UsesAllocatorsDeclKind::AllocatorTrait;
   }
   bool VisitStmt(const Stmt *S) {
@@ -7651,7 +7650,7 @@ public:
   bool doesCondDependOnLC() const { return CondDependOnLC.hasValue(); }
   /// Returns index of the loop we depend on (starting from 1), or 0 otherwise.
   unsigned getLoopDependentIdx() const {
-    return InitDependOnLC.getValueOr(CondDependOnLC.getValueOr(0));
+    return InitDependOnLC.value_or(CondDependOnLC.value_or(0));
   }
 
 private:
@@ -8050,7 +8049,7 @@ bool OpenMPIterationSpaceChecker::checkAndSetCond(Expr *S) {
           CE->getArg(1), CE->getSourceRange(), CE->getOperatorLoc());
     }
   }
-  if (Res.hasValue())
+  if (Res)
     return *Res;
   if (dependent() || SemaRef.CurContext->isDependentContext())
     return false;
@@ -8428,7 +8427,7 @@ Expr *OpenMPIterationSpaceChecker::buildNumIterations(
         tryBuildCapture(SemaRef, MinLessMaxRes.get(), Captures).get();
     if (!MinLessMax)
       return nullptr;
-    if (TestIsLessOp.getValue()) {
+    if (*TestIsLessOp) {
       // LB(MinVal) < LB(MaxVal) ? LB(MinVal) : LB(MaxVal) - min(LB(MinVal),
       // LB(MaxVal))
       ExprResult MinLB = SemaRef.ActOnConditionalOp(DefaultLoc, DefaultLoc,
@@ -8505,7 +8504,7 @@ Expr *OpenMPIterationSpaceChecker::buildNumIterations(
         tryBuildCapture(SemaRef, MinGreaterMaxRes.get(), Captures).get();
     if (!MinGreaterMax)
       return nullptr;
-    if (TestIsLessOp.getValue()) {
+    if (*TestIsLessOp) {
       // UB(MinVal) > UB(MaxVal) ? UB(MinVal) : UB(MaxVal) - max(UB(MinVal),
       // UB(MaxVal))
       ExprResult MaxUB = SemaRef.ActOnConditionalOp(
@@ -8600,7 +8599,7 @@ std::pair<Expr *, Expr *> OpenMPIterationSpaceChecker::buildMinMaxValues(
   if (!Upper || !Lower)
     return std::make_pair(nullptr, nullptr);
 
-  if (TestIsLessOp.getValue())
+  if (*TestIsLessOp)
     MinExpr = Lower;
   else
     MaxExpr = Upper;
@@ -8644,7 +8643,7 @@ std::pair<Expr *, Expr *> OpenMPIterationSpaceChecker::buildMinMaxValues(
   if (!Diff.isUsable())
     return std::make_pair(nullptr, nullptr);
 
-  if (TestIsLessOp.getValue()) {
+  if (*TestIsLessOp) {
     // MinExpr = Lower;
     // MaxExpr = Lower + (((Upper - Lower [- 1]) / Step) * Step)
     Diff = SemaRef.BuildBinOp(
@@ -8677,7 +8676,7 @@ std::pair<Expr *, Expr *> OpenMPIterationSpaceChecker::buildMinMaxValues(
   if (!Diff.isUsable())
     return std::make_pair(nullptr, nullptr);
 
-  if (TestIsLessOp.getValue())
+  if (*TestIsLessOp)
     MaxExpr = Diff.get();
   else
     MinExpr = Diff.get();
@@ -14464,8 +14463,7 @@ StmtResult Sema::ActOnOpenMPUnrollDirective(ArrayRef<OMPClause *> Clauses,
   uint64_t Factor;
   SourceLocation FactorLoc;
   if (Expr *FactorVal = PartialClause->getFactor()) {
-    Factor =
-        FactorVal->getIntegerConstantExpr(Context).getValue().getZExtValue();
+    Factor = FactorVal->getIntegerConstantExpr(Context)->getZExtValue();
     FactorLoc = FactorVal->getExprLoc();
   } else {
     // TODO: Use a better profitability model.
@@ -22184,7 +22182,7 @@ static void checkDeclInTargetContext(SourceLocation SL, SourceRange SR,
       return;
     }
   }
-  if (MapTy.hasValue())
+  if (MapTy)
     return;
   SemaRef.Diag(VD->getLocation(), diag::warn_omp_not_in_target_context);
   SemaRef.Diag(SL, diag::note_used_here) << SR;

@@ -153,7 +153,7 @@ llvm::Optional<llvm::InlineCost> static getDefaultInlineAdvice(
   };
   return llvm::shouldInline(
       CB, GetInlineCost, ORE,
-      Params.EnableDeferral.getValueOr(EnableInlineDeferral));
+      Params.EnableDeferral.value_or(EnableInlineDeferral));
 }
 
 std::unique_ptr<InlineAdvice>
@@ -573,13 +573,12 @@ std::string llvm::AnnotateInlinePassName(InlineContext IC) {
 }
 
 const char *InlineAdvisor::getAnnotatedInlinePassName() {
-  if (!IC.hasValue())
+  if (!IC)
     return DEBUG_TYPE;
 
   // IC is constant and initialized in constructor, so compute the annotated
   // name only once.
-  static const std::string PassName =
-      llvm::AnnotateInlinePassName(IC.getValue());
+  static const std::string PassName = llvm::AnnotateInlinePassName(*IC);
 
   return PassName.c_str();
 }
@@ -598,7 +597,7 @@ InlineAdvisor::getMandatoryKind(CallBase &CB, FunctionAnalysisManager &FAM,
   auto TrivialDecision =
       llvm::getAttributeBasedInliningDecision(CB, &Callee, TIR, GetTLI);
 
-  if (TrivialDecision.hasValue()) {
+  if (TrivialDecision) {
     if (TrivialDecision->isSuccess())
       return MandatoryInliningKind::Always;
     else
