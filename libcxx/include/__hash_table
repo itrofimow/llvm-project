@@ -127,7 +127,7 @@ __next_hash_pow2(size_t __n)
 }
 
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc> class __hash_table;
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys> class __hash_table;
 
 template <class _NodePtr>      class _LIBCPP_TEMPLATE_VIS __hash_iterator;
 template <class _ConstNodePtr> class _LIBCPP_TEMPLATE_VIS __hash_const_iterator;
@@ -369,7 +369,7 @@ private:
             __get_db()->__insert_ic(this, __c);
 #endif
         }
-    template <class, class, class, class> friend class __hash_table;
+    template <class, class, class, class, class> friend class __hash_table;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_const_iterator;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_map_iterator;
     template <class, class, class, class, class> friend class _LIBCPP_TEMPLATE_VIS unordered_map;
@@ -483,7 +483,7 @@ private:
             __get_db()->__insert_ic(this, __c);
 #endif
         }
-    template <class, class, class, class> friend class __hash_table;
+    template <class, class, class, class, class> friend class __hash_table;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_map_const_iterator;
     template <class, class, class, class, class> friend class _LIBCPP_TEMPLATE_VIS unordered_map;
     template <class, class, class, class, class> friend class _LIBCPP_TEMPLATE_VIS unordered_multimap;
@@ -597,7 +597,7 @@ private:
             if (__node_ != nullptr)
                 __node_ = __node_->__next_;
         }
-    template <class, class, class, class> friend class __hash_table;
+    template <class, class, class, class, class> friend class __hash_table;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_const_local_iterator;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_map_iterator;
 };
@@ -730,7 +730,7 @@ private:
             if (__node_ != nullptr)
                 __node_ = __node_->__next_;
         }
-    template <class, class, class, class> friend class __hash_table;
+    template <class, class, class, class, class> friend class __hash_table;
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_map_const_iterator;
 };
 
@@ -860,7 +860,14 @@ __diagnose_unordered_container_requirements(int);
 template <class _Key, class _Hash, class _Equal>
 int __diagnose_unordered_container_requirements(void*);
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+// Since both unordered_set/map and unordered_multiset/multimap 
+// use the same implementation of hash_table we might do reduntant work 
+// for unique keys containers (namely calling key_eq in rehashing).
+// This trait helps to distinguish between unique keys/non-unique keys containers.
+template <bool _UniqueKeys>
+struct __hash_table_unique_keys : std::integral_constant<bool, _UniqueKeys> {};
+
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 class __hash_table
 {
 public:
@@ -1342,9 +1349,9 @@ private:
     template <class, class, class, class, class> friend class _LIBCPP_TEMPLATE_VIS unordered_multimap;
 };
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table()
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table()
     _NOEXCEPT_(
         is_nothrow_default_constructible<__bucket_list>::value &&
         is_nothrow_default_constructible<__first_node>::value &&
@@ -1356,9 +1363,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table()
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(const hasher& __hf,
                                                        const key_equal& __eql)
     : __bucket_list_(nullptr, __bucket_list_deleter()),
       __p1_(),
@@ -1367,8 +1374,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(const hasher& __hf,
                                                        const key_equal& __eql,
                                                        const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
@@ -1378,8 +1385,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const hasher& __hf,
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const allocator_type& __a)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
       __p2_(0, __default_init_tag()),
@@ -1387,8 +1394,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const allocator_type& __a
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(const __hash_table& __u)
     : __bucket_list_(nullptr,
           __bucket_list_deleter(allocator_traits<__pointer_allocator>::
               select_on_container_copy_construction(
@@ -1400,8 +1407,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u)
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u,
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(const __hash_table& __u,
                                                        const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
@@ -1410,8 +1417,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(const __hash_table& __u,
 {
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(__hash_table&& __u)
         _NOEXCEPT_(
             is_nothrow_move_constructible<__bucket_list>::value &&
             is_nothrow_move_constructible<__first_node>::value &&
@@ -1432,8 +1439,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u)
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u,
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__hash_table(__hash_table&& __u,
                                                        const allocator_type& __a)
     : __bucket_list_(nullptr, __bucket_list_deleter(__pointer_allocator(__a), 0)),
       __p1_(__default_init_tag(), __node_allocator(__a)),
@@ -1457,8 +1464,8 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__hash_table(__hash_table&& __u,
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::~__hash_table()
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::~__hash_table()
 {
 #if defined(_LIBCPP_CXX03_LANG)
     static_assert((is_copy_constructible<key_equal>::value),
@@ -1471,9 +1478,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::~__hash_table()
     std::__debug_db_erase_c(this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__copy_assign_alloc(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__copy_assign_alloc(
         const __hash_table& __u, true_type)
 {
     if (__node_alloc() != __u.__node_alloc())
@@ -1486,9 +1493,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__copy_assign_alloc(
     __node_alloc() = __u.__node_alloc();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>&
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(const __hash_table& __u)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>&
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::operator=(const __hash_table& __u)
 {
     if (this != _VSTD::addressof(__u))
     {
@@ -1501,9 +1508,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(const __hash_table& __u)
     return *this;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__deallocate_node(__next_pointer __np)
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__deallocate_node(__next_pointer __np)
     _NOEXCEPT
 {
     __node_allocator& __na = __node_alloc();
@@ -1532,9 +1539,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__deallocate_node(__next_pointer __np)
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__detach() _NOEXCEPT
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__detach() _NOEXCEPT
 {
     size_type __bc = bucket_count();
     for (size_type __i = 0; __i < __bc; ++__i)
@@ -1545,9 +1552,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__detach() _NOEXCEPT
     return __cache;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__move_assign(
         __hash_table& __u, true_type)
     _NOEXCEPT_(
         is_nothrow_move_assignable<__node_allocator>::value &&
@@ -1574,9 +1581,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
     std::__debug_db_swap(this, std::addressof(__u));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__move_assign(
         __hash_table& __u, false_type)
 {
     if (__node_alloc() == __u.__node_alloc())
@@ -1622,10 +1629,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__move_assign(
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-__hash_table<_Tp, _Hash, _Equal, _Alloc>&
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(__hash_table&& __u)
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>&
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::operator=(__hash_table&& __u)
     _NOEXCEPT_(
         __node_traits::propagate_on_container_move_assignment::value &&
         is_nothrow_move_assignable<__node_allocator>::value &&
@@ -1637,10 +1644,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::operator=(__hash_table&& __u)
     return *this;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _InputIterator>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_unique(_InputIterator __first,
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__assign_unique(_InputIterator __first,
                                                           _InputIterator __last)
 {
     typedef iterator_traits<_InputIterator> _ITraits;
@@ -1676,10 +1683,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_unique(_InputIterator __first
         __insert_unique(*__first);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _InputIterator>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_multi(_InputIterator __first,
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__assign_multi(_InputIterator __first,
                                                          _InputIterator __last)
 {
     typedef iterator_traits<_InputIterator> _ITraits;
@@ -1716,41 +1723,41 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__assign_multi(_InputIterator __first,
         __insert_multi(_NodeTypes::__get_value(*__first));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::begin() _NOEXCEPT
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::begin() _NOEXCEPT
 {
     return iterator(__p1_.first().__next_, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::end() _NOEXCEPT
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::end() _NOEXCEPT
 {
     return iterator(nullptr, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::begin() const _NOEXCEPT
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::begin() const _NOEXCEPT
 {
     return const_iterator(__p1_.first().__next_, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::end() const _NOEXCEPT
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::end() const _NOEXCEPT
 {
     return const_iterator(nullptr, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::clear() _NOEXCEPT
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::clear() _NOEXCEPT
 {
     if (size() > 0)
     {
@@ -1771,10 +1778,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::clear() _NOEXCEPT
 //
 // Note that this function does forward exceptions if key_eq() throws, and never
 // mutates __value or actually inserts into the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 _LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_prepare(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_unique_prepare(
     size_t __hash, value_type& __value)
 {
     size_type __bc = bucket_count();
@@ -1806,10 +1813,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_prepare(
 // and updating size(). Assumes that __nd->__hash is up-to-date, and that
 // rehashing has already occurred and that no element with the same key exists
 // in the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 _LIBCPP_INLINE_VISIBILITY
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_perform(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_unique_perform(
     __node_pointer __nd) _NOEXCEPT
 {
     size_type __bc = bucket_count();
@@ -1834,9 +1841,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique_perform(
     ++size();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique(__node_pointer __nd)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_unique(__node_pointer __nd)
 {
     __nd->__hash_ = hash_function()(__nd->__value_);
     __next_pointer __existing_node =
@@ -1860,9 +1867,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_unique(__node_pointer __
 //
 // Note that this function does forward exceptions if key_eq() throws, and never
 // mutates __value or actually inserts into the map.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__next_pointer
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_prepare(
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__next_pointer
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_multi_prepare(
     size_t __cp_hash, value_type& __cp_val)
 {
     size_type __bc = bucket_count();
@@ -1903,9 +1910,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_prepare(
 // uniqueness has already been performed (in __node_insert_multi_prepare), so
 // all we need to do is update the bucket and size(). Assumes that __cp->__hash
 // is up-to-date.
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_perform(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_multi_perform(
     __node_pointer __cp, __next_pointer __pn) _NOEXCEPT
 {
     size_type __bc = bucket_count();
@@ -1936,9 +1943,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi_perform(
 }
 
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(__node_pointer __cp)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_multi(__node_pointer __cp)
 {
     __cp->__hash_ = hash_function()(__cp->__value_);
     __next_pointer __pn = __node_insert_multi_prepare(__cp->__hash(), __cp->__value_);
@@ -1947,9 +1954,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(__node_pointer __c
     return iterator(__cp->__ptr(), this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_insert_multi(
         const_iterator __p, __node_pointer __cp)
 {
     _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
@@ -1980,10 +1987,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_insert_multi(
 
 
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key, class ..._Args>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_unique_key_args(_Key const& __k, _Args&&... __args)
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__emplace_unique_key_args(_Key const& __k, _Args&&... __args)
 {
 
     size_t __hash = hash_function()(__k);
@@ -2042,10 +2049,10 @@ __done:
     return pair<iterator, bool>(iterator(__nd, this), __inserted);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class... _Args>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator, bool>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_unique_impl(_Args&&... __args)
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator, bool>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__emplace_unique_impl(_Args&&... __args)
 {
     __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
     pair<iterator, bool> __r = __node_insert_unique(__h.get());
@@ -2054,10 +2061,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_unique_impl(_Args&&... __arg
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class... _Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_multi(_Args&&... __args)
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__emplace_multi(_Args&&... __args)
 {
     __node_holder __h = __construct_node(_VSTD::forward<_Args>(__args)...);
     iterator __r = __node_insert_multi(__h.get());
@@ -2065,10 +2072,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_multi(_Args&&... __args)
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class... _Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_hint_multi(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__emplace_hint_multi(
         const_iterator __p, _Args&&... __args)
 {
     _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
@@ -2081,11 +2088,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__emplace_hint_multi(
 }
 
 #if _LIBCPP_STD_VER > 14
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle, class _InsertReturnType>
 _LIBCPP_INLINE_VISIBILITY
 _InsertReturnType
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_insert_unique(
     _NodeHandle&& __nh)
 {
     if (__nh.empty())
@@ -2096,11 +2103,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
     return _InsertReturnType{__result.first, __result.second, _VSTD::move(__nh)};
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle>
 _LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_insert_unique(
     const_iterator, _NodeHandle&& __nh)
 {
     if (__nh.empty())
@@ -2111,11 +2118,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_unique(
     return __result.first;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle>
 _LIBCPP_INLINE_VISIBILITY
 _NodeHandle
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_extract(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_extract(
     key_type const& __key)
 {
     iterator __i = find(__key);
@@ -2124,22 +2131,22 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_extract(
     return __node_handle_extract<_NodeHandle>(__i);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle>
 _LIBCPP_INLINE_VISIBILITY
 _NodeHandle
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_extract(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_extract(
     const_iterator __p)
 {
     allocator_type __alloc(__node_alloc());
     return _NodeHandle(remove(__p).release(), __alloc);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Table>
 _LIBCPP_INLINE_VISIBILITY
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_unique(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_merge_unique(
     _Table& __source)
 {
     static_assert(is_same<__node, typename _Table::__node>::value, "");
@@ -2161,11 +2168,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_unique(
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle>
 _LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_insert_multi(
     _NodeHandle&& __nh)
 {
     if (__nh.empty())
@@ -2175,11 +2182,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
     return __result;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _NodeHandle>
 _LIBCPP_INLINE_VISIBILITY
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_insert_multi(
     const_iterator __hint, _NodeHandle&& __nh)
 {
     if (__nh.empty())
@@ -2189,11 +2196,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_insert_multi(
     return __result;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Table>
 _LIBCPP_INLINE_VISIBILITY
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_multi(
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_handle_merge_multi(
     _Table& __source)
 {
     static_assert(is_same<typename _Table::__node, __node>::value, "");
@@ -2212,9 +2219,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_handle_merge_multi(
 }
 #endif // _LIBCPP_STD_VER > 14
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::rehash(size_type __n)
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::rehash(size_type __n)
 _LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK
 {
     if (__n == 1)
@@ -2237,9 +2244,9 @@ _LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__rehash(size_type __nbc)
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__rehash(size_type __nbc)
 {
     std::__debug_db_invalidate_all(this);
     __pointer_allocator& __npa = __bucket_list_.get_deleter().__alloc();
@@ -2274,11 +2281,13 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__rehash(size_type __nbc)
                     else
                     {
                         __next_pointer __np = __cp;
-                        for (; __np->__next_ != nullptr &&
-                               key_eq()(__cp->__upcast()->__value_,
-                                        __np->__next_->__upcast()->__value_);
-                                                           __np = __np->__next_)
-                            ;
+                        if _LIBCPP_CONSTEXPR_AFTER_CXX14 (!_UniqueKeys::value) {
+                            for (; __np->__next_ != nullptr &&
+                                   key_eq()(__cp->__upcast()->__value_,
+                                            __np->__next_->__upcast()->__value_);
+                                                               __np = __np->__next_)
+                                ;
+                        }
                         __pp->__next_ = __np->__next_;
                         __np->__next_ = __bucket_list_[__chash]->__next_;
                         __bucket_list_[__chash]->__next_ = __cp;
@@ -2290,10 +2299,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__rehash(size_type __nbc)
     }
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k)
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::find(const _Key& __k)
 {
     size_t __hash = hash_function()(__k);
     size_type __bc = bucket_count();
@@ -2317,10 +2326,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k)
     return end();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k) const
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::find(const _Key& __k) const
 {
     size_t __hash = hash_function()(__k);
     size_type __bc = bucket_count();
@@ -2345,10 +2354,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::find(const _Key& __k) const
     return end();
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class ..._Args>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node(_Args&& ...__args)
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__construct_node(_Args&& ...__args)
 {
     static_assert(!__is_hash_value_type<_Args...>::value,
                   "Construct cannot be called with a hash value type");
@@ -2361,10 +2370,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node(_Args&& ...__args)
     return __h;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _First, class ..._Rest>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node_hash(
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__construct_node_hash(
     size_t __hash, _First&& __f, _Rest&& ...__rest)
 {
     static_assert(!__is_hash_value_type<_First, _Rest...>::value,
@@ -2380,9 +2389,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__construct_node_hash(
     return __h;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __p)
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::erase(const_iterator __p)
 {
     __next_pointer __np = __p.__node_;
     _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__p)) == this,
@@ -2396,9 +2405,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __p)
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __first,
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::erase(const_iterator __first,
                                                 const_iterator __last)
 {
     _LIBCPP_DEBUG_ASSERT(__get_const_db()->__find_c_from_i(_VSTD::addressof(__first)) == this,
@@ -2416,10 +2425,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::erase(const_iterator __first,
     return iterator (__np, this);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_unique(const _Key& __k)
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__erase_unique(const _Key& __k)
 {
     iterator __i = find(__k);
     if (__i == end())
@@ -2428,10 +2437,10 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_unique(const _Key& __k)
     return 1;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_multi(const _Key& __k)
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__erase_multi(const _Key& __k)
 {
     size_type __r = 0;
     iterator __i = find(__k);
@@ -2447,9 +2456,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__erase_multi(const _Key& __k)
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::__node_holder
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::remove(const_iterator __p) _NOEXCEPT
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__node_holder
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::remove(const_iterator __p) _NOEXCEPT
 {
     // current node
     __next_pointer __cn = __p.__node_;
@@ -2498,19 +2507,19 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::remove(const_iterator __p) _NOEXCEPT
     return __node_holder(__cn->__upcast(), _Dp(__node_alloc(), true));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
 inline
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__count_unique(const _Key& __k) const
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__count_unique(const _Key& __k) const
 {
     return static_cast<size_type>(find(__k) != end());
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__count_multi(const _Key& __k) const
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__count_multi(const _Key& __k) const
 {
     size_type __r = 0;
     const_iterator __i = find(__k);
@@ -2526,11 +2535,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__count_multi(const _Key& __k) const
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__equal_range_unique(
         const _Key& __k)
 {
     iterator __i = find(__k);
@@ -2540,11 +2549,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
     return pair<iterator, iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__equal_range_unique(
         const _Key& __k) const
 {
     const_iterator __i = find(__k);
@@ -2554,11 +2563,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_unique(
     return pair<const_iterator, const_iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__equal_range_multi(
         const _Key& __k)
 {
     iterator __i = find(__k);
@@ -2574,11 +2583,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
     return pair<iterator, iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 template <class _Key>
-pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator,
-     typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::const_iterator>
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
+pair<typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator,
+     typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::const_iterator>
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__equal_range_multi(
         const _Key& __k) const
 {
     const_iterator __i = find(__k);
@@ -2594,9 +2603,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::__equal_range_multi(
     return pair<const_iterator, const_iterator>(__i, __j);
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 void
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::swap(__hash_table& __u)
 #if _LIBCPP_STD_VER <= 11
     _NOEXCEPT_(
         __is_nothrow_swappable<hasher>::value && __is_nothrow_swappable<key_equal>::value
@@ -2634,9 +2643,9 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::swap(__hash_table& __u)
     std::__debug_db_swap(this, std::addressof(__u));
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
-typename __hash_table<_Tp, _Hash, _Equal, _Alloc>::size_type
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::bucket_size(size_type __n) const
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
+typename __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::size_type
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::bucket_size(size_type __n) const
 {
     _LIBCPP_ASSERT(__n < bucket_count(),
         "unordered container::bucket_size(n) called with n >= bucket_count()");
@@ -2653,11 +2662,11 @@ __hash_table<_Tp, _Hash, _Equal, _Alloc>::bucket_size(size_type __n) const
     return __r;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 inline _LIBCPP_INLINE_VISIBILITY
 void
-swap(__hash_table<_Tp, _Hash, _Equal, _Alloc>& __x,
-     __hash_table<_Tp, _Hash, _Equal, _Alloc>& __y)
+swap(__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>& __x,
+     __hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>& __y)
     _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y)))
 {
     __x.swap(__y);
@@ -2665,30 +2674,30 @@ swap(__hash_table<_Tp, _Hash, _Equal, _Alloc>& __x,
 
 #ifdef _LIBCPP_ENABLE_DEBUG_MODE
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__dereferenceable(const const_iterator* __i) const
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__dereferenceable(const const_iterator* __i) const
 {
     return __i->__node_ != nullptr;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__decrementable(const const_iterator*) const
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__decrementable(const const_iterator*) const
 {
     return false;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__addable(const const_iterator*, ptrdiff_t) const
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__addable(const const_iterator*, ptrdiff_t) const
 {
     return false;
 }
 
-template <class _Tp, class _Hash, class _Equal, class _Alloc>
+template <class _Tp, class _Hash, class _Equal, class _Alloc, class _UniqueKeys>
 bool
-__hash_table<_Tp, _Hash, _Equal, _Alloc>::__subscriptable(const const_iterator*, ptrdiff_t) const
+__hash_table<_Tp, _Hash, _Equal, _Alloc, _UniqueKeys>::__subscriptable(const const_iterator*, ptrdiff_t) const
 {
     return false;
 }

@@ -1044,7 +1044,7 @@ private:
                                                  __value_type>::type          __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+                         __key_equal,  __allocator_type, __hash_table_unique_keys<true> >   __table;
 
     __table __table_;
 
@@ -1934,7 +1934,7 @@ private:
                                                  __value_type>::type          __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+                         __key_equal,  __allocator_type, __hash_table_unique_keys<false> >   __table;
 
     __table __table_;
 

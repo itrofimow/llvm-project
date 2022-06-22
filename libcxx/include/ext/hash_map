@@ -487,7 +487,7 @@ private:
         std::allocator_traits<allocator_type>, __value_type>::type __allocator_type;
 
     typedef std::__hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+                         __key_equal,  __allocator_type, std::__hash_table_unique_keys<true> >   __table;
 
     __table __table_;
 
@@ -760,7 +760,7 @@ private:
     typedef typename std::__rebind_alloc_helper<std::allocator_traits<allocator_type>, __value_type>::type __allocator_type;
 
     typedef std::__hash_table<__value_type, __hasher,
-                         __key_equal,  __allocator_type>   __table;
+                         __key_equal,  __allocator_type, std::__hash_table_unique_keys<false> >   __table;
 
     __table __table_;
 

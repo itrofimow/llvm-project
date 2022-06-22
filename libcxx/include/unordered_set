@@ -513,7 +513,8 @@ public:
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_table<value_type, hasher, key_equal, allocator_type> __table;
+    typedef __hash_table<value_type, hasher,
+                key_equal, allocator_type, __hash_table_unique_keys<true> > __table;
 
     __table __table_;
 
@@ -1169,7 +1170,8 @@ public:
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_table<value_type, hasher, key_equal, allocator_type> __table;
+    typedef __hash_table<value_type, hasher,
+                key_equal, allocator_type, __hash_table_unique_keys<false> > __table;
 
     __table __table_;
 
