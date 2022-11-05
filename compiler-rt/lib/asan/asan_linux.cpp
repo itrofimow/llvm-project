@@ -53,7 +53,7 @@ extern "C" void* _DYNAMIC;
 #include <ucontext.h>
 extern Elf_Dyn _DYNAMIC;
 #else
-#include <sys/ucontext.h>
+#include <ucontext.h>
 #include <link.h>
 extern ElfW(Dyn) _DYNAMIC[];
 #endif
@@ -215,17 +215,43 @@ void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   *ssize = ucp->uc_stack.ss_size;
 }
 
-void ResetContextStack(void *context) {
-  ucontext_t *ucp = (ucontext_t *)context;
-  ucp->uc_stack.ss_sp = nullptr;
-  ucp->uc_stack.ss_size = 0;
+void SetContextStack(void *context, uptr stack, uptr ssize) {
+  ucontext_t *ucp = (ucontext_t*)context;
+
+  ucp->uc_stack.ss_sp = (void *)stack;
+  ucp->uc_stack.ss_size = ssize;
 }
+
+void MakeContext(void *context, void (*func)(), int ptr_as_int_p1, int ptr_as_int_p2) {
+  // We expect provided `func` to convert these 2 arguments to a pointer in some way
+  static_assert(sizeof(int) * 2 >= sizeof(uptr));
+
+  ::makecontext((ucontext_t *)context, func, 2, ptr_as_int_p1, ptr_as_int_p2);
+}
+
+thread_local ucontext_t intermediate_context{};
+
+void* GetIntermediateContext() {
+  return &intermediate_context;
+}
+
 #  else
 void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   UNIMPLEMENTED();
 }
 
-void ResetContextStack(void *context) { UNIMPLEMENTED(); }
+void SetContextStack(void *context, uptr stack, uptr ssize) {
+  UNIMPLEMENTED();
+}
+
+void MakeContext(void *context, void (*func)(), int ptr_as_int_p1, int ptr_as_int_p2) {
+  UNIMPLEMENTED();
+}
+
+void* GetIntermediateContext() {
+  UNIMPLEMENTED();
+}
+
 #  endif
 
 void *AsanDlSymNext(const char *sym) {

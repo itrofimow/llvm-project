@@ -106,7 +106,14 @@ void AsanApplyToGlobals(globals_op_fptr op, const void *needle);
 void AsanOnDeadlySignal(int, void *siginfo, void *context);
 
 void ReadContextStack(void *context, uptr *stack, uptr *ssize);
-void ResetContextStack(void *context);
+void SetContextStack(void *context, uptr stack, uptr ssize);
+// makecontext(3) accepts arbitrary number of `int` arguments,
+// which isn't that usefull, so instead we pass pointer to user data as
+// 2 integers here.
+// Ugly, but this oversight in makecontext API is the reason of its deprecation,
+// so fighting fire with fire.
+void MakeContext(void *context, void (*func)(), int ptr_as_int_p1, int ptr_as_int_p2);
+void* GetIntermediateContext();
 void StopInitOrderChecking();
 
 // Wrapper for TLS/TSD.

@@ -259,10 +259,63 @@ static void ClearShadowMemoryForContextStack(uptr stack, uptr ssize) {
 
 INTERCEPTOR(int, getcontext, struct ucontext_t *ucp) {
   // API does not requires to have ucp clean, and sets only part of fields. We
-  // use ucp->uc_stack to unpoison new stack. We prefer to have zeroes then
+  // use ucp->uc_stack to unpoison new stack. We prefer to have zeroes than
   // uninitialized bytes.
-  ResetContextStack(ucp);
+  SetContextStack(ucp, 0, 0);
   return REAL(getcontext)(ucp);
+}
+
+constexpr uptr kIntermediateStackSize = 65536;
+thread_local char IntermediateSwapcontextStack[kIntermediateStackSize];
+
+struct SwapcontextMeta final {
+  SwapcontextMeta(struct ucontext_t* oucp, struct ucontext_t *ucp)
+      : oucp{oucp}, ucp{ucp},
+        intermediate_context{static_cast<struct ucontext_t *>(GetIntermediateContext())} {
+    ReadContextStack(oucp, &oucp_ss_sp, &oucp_ss_size);
+
+    REAL(getcontext)(intermediate_context);
+    SetContextStack((void *)intermediate_context, (uptr)IntermediateSwapcontextStack,
+            kIntermediateStackSize);
+  }
+
+  struct ucontext_t* oucp;
+  struct ucontext_t* ucp;
+  struct ucontext_t* intermediate_context;
+
+  uptr oucp_ss_sp;
+  uptr oucp_ss_size;
+};
+
+union PassContextMetaPtrAsTwoInts {
+  int a[2];
+  SwapcontextMeta *p;
+};
+
+int DoRealSwapcontext(struct ucontext_t *oucp,
+                      struct ucontext_t *ucp);
+
+void SwapcontextOucpStackRestoration(int ptr_as_int_p1, int ptr_as_int_p2) {
+  PassContextMetaPtrAsTwoInts u;
+  u.a[0] = ptr_as_int_p1;
+  u.a[1] = ptr_as_int_p2;
+
+  auto& meta = *u.p;
+  SetContextStack(meta.oucp, meta.oucp_ss_sp, meta.oucp_ss_size);
+
+  DoRealSwapcontext(meta.intermediate_context, meta.ucp);
+}
+
+int SwapcontextWithOucpStackRestoration(struct ucontext_t *oucp,
+                                   struct ucontext_t *ucp) {
+  SwapcontextMeta meta{oucp, ucp};
+
+  PassContextMetaPtrAsTwoInts u;
+  u.p = &meta;
+  MakeContext(meta.intermediate_context,
+          (void (*)())SwapcontextOucpStackRestoration, u.a[0], u.a[1]);
+
+  return DoRealSwapcontext(oucp, meta.intermediate_context);
 }
 
 INTERCEPTOR(int, swapcontext, struct ucontext_t *oucp,
@@ -279,17 +332,11 @@ INTERCEPTOR(int, swapcontext, struct ucontext_t *oucp,
   ReadContextStack(ucp, &stack, &ssize);
   ClearShadowMemoryForContextStack(stack, ssize);
 
-  // See getcontext interceptor.
-  ResetContextStack(oucp);
+  // swapcontext(3) doesn't guarantee to preserve oucp->uc_stack values,
+  // and since we use them to clear shadow memory when oucp later becomes ucp
+  // we have to do some trickery here
+  int res = SwapcontextWithOucpStackRestoration(oucp, ucp);
 
-#    if __has_attribute(__indirect_return__) && \
-        (defined(__x86_64__) || defined(__i386__))
-  int (*real_swapcontext)(struct ucontext_t *, struct ucontext_t *)
-      __attribute__((__indirect_return__)) = REAL(swapcontext);
-  int res = real_swapcontext(oucp, ucp);
-#    else
-  int res = REAL(swapcontext)(oucp, ucp);
-#    endif
   // swapcontext technically does not return, but program may swap context to
   // "oucp" later, that would look as if swapcontext() returned 0.
   // We need to clear shadow for ucp once again, as it may be in arbitrary
@@ -297,6 +344,20 @@ INTERCEPTOR(int, swapcontext, struct ucontext_t *oucp,
   ClearShadowMemoryForContextStack(stack, ssize);
   return res;
 }
+
+int DoRealSwapcontext(struct ucontext_t *oucp,
+                      struct ucontext_t *ucp) {
+#    if __has_attribute(__indirect_return__) && \
+        (defined(__x86_64__) || defined(__i386__))
+  int (*real_swapcontext)(struct ucontext_t *, struct ucontext_t *)
+      __attribute__((__indirect_return__)) = REAL(swapcontext);
+  return real_swapcontext(oucp, ucp);
+#    else
+  return REAL(swapcontext)(oucp, ucp);
+#    endif
+}
+
+
 #endif  // ASAN_INTERCEPT_SWAPCONTEXT
 
 #if SANITIZER_NETBSD

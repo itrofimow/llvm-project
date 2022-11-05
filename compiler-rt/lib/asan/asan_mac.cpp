@@ -99,7 +99,17 @@ void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   UNIMPLEMENTED();
 }
 
-void ResetContextStack(void *context) { UNIMPLEMENTED(); }
+void SetContextStack(void *context, uptr stack, uptr ssize) {
+  UNIMPLEMENTED();
+}
+
+void MakeContext(void *context, void (*func)(), int ptr_as_int_p1, int ptr_as_int_p2) {
+  UNIMPLEMENTED();
+}
+
+void* GetIntermediateContext() {
+  UNIMPLEMENTED();
+}
 
 // Support for the following functions from libdispatch on Mac OS:
 //   dispatch_async_f()
