@@ -196,6 +196,9 @@ void RunHugeStack() {
 void handler(int sig) { CallNoReturn(); }
 
 int main(int argc, char **argv) {
+  char local;
+  main_thread_stack = &local;
+  main_thread_stacksize = 8 << 20;
   // CHECK: WARNING: ASan doesn't fully support makecontext/swapcontext
   // CHECK-NOT: ASan is ignoring requested __asan_handle_no_return
   RunHugeStack();
