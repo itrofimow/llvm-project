@@ -103,10 +103,6 @@ void SetContextStack(void *context, uptr stack, uptr ssize) {
   UNIMPLEMENTED();
 }
 
-void MakeContext(void *context, void (*func)(), int ptr_as_int_p1, int ptr_as_int_p2) {
-  UNIMPLEMENTED();
-}
-
 void* GetIntermediateContext() {
   UNIMPLEMENTED();
 }

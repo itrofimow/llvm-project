@@ -177,9 +177,8 @@ void DoRunHugeStack(char *child_stack) {
     perror("swapcontext");
     _exit(1);
   }
-  __sanitizer_finish_switch_fiber(
-      fake_stack_save, (const void **)&child_huge_stack_context.uc_stack.ss_sp,
-      &child_huge_stack_context.uc_stack.ss_size);
+  __sanitizer_finish_switch_fiber(fake_stack_save, &from_stack, &from_stacksize);
+
   for (int i = 0; i < kHugeStackSize; ++i) {
     child_stack[i] = i;
   }

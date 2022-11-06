@@ -265,6 +265,8 @@ INTERCEPTOR(int, getcontext, struct ucontext_t *ucp) {
   return REAL(getcontext)(ucp);
 }
 
+DEFINE_REAL(void, makecontext, struct ucontext_t *, void(*)(), int, ...);
+
 constexpr uptr kIntermediateStackSize = 65536;
 thread_local char IntermediateSwapcontextStack[kIntermediateStackSize];
 
@@ -312,8 +314,8 @@ int SwapcontextWithOucpStackRestoration(struct ucontext_t *oucp,
 
   PassContextMetaPtrAsTwoInts u;
   u.p = &meta;
-  MakeContext(meta.intermediate_context,
-          (void (*)())SwapcontextOucpStackRestoration, u.a[0], u.a[1]);
+  REAL(makecontext)(meta.intermediate_context,
+          (void (*)())SwapcontextOucpStackRestoration, 2, u.a[0], u.a[1]);
 
   return DoRealSwapcontext(oucp, meta.intermediate_context);
 }
@@ -722,6 +724,7 @@ void InitializeAsanInterceptors() {
 #if ASAN_INTERCEPT_SWAPCONTEXT
   ASAN_INTERCEPT_FUNC(getcontext);
   ASAN_INTERCEPT_FUNC(swapcontext);
+  ::__interception::InterceptFunction("makecontext", (::__interception::uptr *) & REAL(makecontext), 0, 0);
 #endif
 #if ASAN_INTERCEPT__LONGJMP
   ASAN_INTERCEPT_FUNC(_longjmp);
