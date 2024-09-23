@@ -77,6 +77,15 @@ static _Unwind_Reason_Code
 unwind_phase1(unw_context_t *uc, unw_cursor_t *cursor, _Unwind_Exception *exception_object) {
   __unw_init_local(cursor, uc);
 
+
+
+
+
+
+
+
+
+
   // Walk each frame looking for a place to stop.
   while (true) {
     // Ask libunwind to get next frame (skip over first which is
@@ -95,6 +104,14 @@ unwind_phase1(unw_context_t *uc, unw_cursor_t *cursor, _Unwind_Exception *except
           (void *)exception_object);
       return _URC_FATAL_PHASE1_ERROR;
     }
+
+
+
+
+
+
+
+
 
     // See if frame has code to run (has personality routine).
     unw_proc_info_t frameInfo;
