@@ -178,6 +178,58 @@ void GDBIndex::updateGdbIndexSection(
   // Copy over the rest of the original data.
   memcpy(Buffer, Data, TrailingSize);
 
+  // Fixup CU-indicies in constant pool.
+  std::unordered_map<uint32_t, uint32_t> OriginalCUIndexToUpdatedCUIndexMap;
+  OriginalCUIndexToUpdatedCUIndexMap.reserve(CUVector.size());
+  for (uint32_t I = 0; I < CUVector.size(); ++I) {
+    OriginalCUIndexToUpdatedCUIndexMap[CUVector[I].first] = I;
+  }
+  const auto RemapConstantPoolCUIndex = [&OriginalCUIndexToUpdatedCUIndexMap](uint32_t OriginalIndex) {
+    const auto it = OriginalCUIndexToUpdatedCUIndexMap.find(OriginalIndex);
+    if (it == OriginalCUIndexToUpdatedCUIndexMap.end()) {
+      errs() << "BOLT-ERROR: .gdb_index unknown CU index in constant pool\n";
+      exit(1);
+    }
+
+    return it->second;
+  };
+
+  const char* const OriginalConstantPoolData = GdbIndexContents.data() + ConstantPoolOffset;
+  uint8_t* const UpdatedConstantPoolData = NewGdbIndexContents + ConstantPoolOffset + Delta;
+
+  const char* OriginalSymbolTableData = GdbIndexContents.data() + SymbolTableOffset;
+  std::set<uint32_t> CUVectorOffsets;
+  while (OriginalSymbolTableData < OriginalConstantPoolData) {
+    const uint32_t NameOffset = read32le(OriginalSymbolTableData);
+    const uint32_t CUVectorOffset = read32le(OriginalSymbolTableData + 4);
+    OriginalSymbolTableData += 8;
+
+    if (NameOffset || CUVectorOffset) {
+      CUVectorOffsets.insert(CUVectorOffset);
+    }
+  }
+
+  for (const auto CUVectorOffset : CUVectorOffsets) {
+    const char* CurrentOriginalConstantPoolData = OriginalConstantPoolData + CUVectorOffset;
+    uint8_t* CurrentUpdatedConstantPoolData = UpdatedConstantPoolData + CUVectorOffset;
+
+    const uint32_t Num = read32le(CurrentOriginalConstantPoolData);
+    CurrentOriginalConstantPoolData += 4;
+    CurrentUpdatedConstantPoolData += 4;
+
+    for (uint32_t J = 0; J < Num; ++J) {
+      const uint32_t CUIndexAndAttributes = read32le(CurrentOriginalConstantPoolData);
+      CurrentOriginalConstantPoolData += 4;
+
+      const uint32_t CUIndex = CUIndexAndAttributes & ((1 << 24) - 1);
+      const uint32_t Attributes = CUIndexAndAttributes >> 24;
+
+      const uint32_t UpdatedCUIndexAndAttributes = RemapConstantPoolCUIndex(CUIndex) | (Attributes << 24);
+      write32le(CurrentUpdatedConstantPoolData, UpdatedCUIndexAndAttributes);
+      CurrentUpdatedConstantPoolData += 4;
+    }
+  }
+
   // Register the new section.
   BC.registerOrUpdateNoteSection(".gdb_index", NewGdbIndexContents,
                                  NewGdbIndexSize);
