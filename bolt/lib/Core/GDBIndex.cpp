@@ -182,7 +182,7 @@ void GDBIndex::updateGdbIndexSection(
   std::unordered_map<uint32_t, uint32_t> OriginalCUIndexToUpdatedCUIndexMap;
   OriginalCUIndexToUpdatedCUIndexMap.reserve(CUVector.size());
   for (uint32_t I = 0; I < CUVector.size(); ++I) {
-    OriginalCUIndexToUpdatedCUIndexMap[CUVector[I].first] = I;
+    OriginalCUIndexToUpdatedCUIndexMap[OffsetToIndexMap.at(CUVector[I].first)] = I;
   }
   const auto RemapConstantPoolCUIndex = [&OriginalCUIndexToUpdatedCUIndexMap](uint32_t OriginalIndex) {
     const auto it = OriginalCUIndexToUpdatedCUIndexMap.find(OriginalIndex);
